@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>{{TITLE}} - 鱼小鳄のBLOG</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="/js/modal.js"></script>
+</head>
+<body>
+
+    <!-- 过渡遮罩 -->
+    <div class="page-transition-overlay active" id="postTransition"></div>
+
+    <!-- 顶部横幅 -->
+    <div class="banner" id="banner">
+        <div class="banner-img" id="bannerImg" style="background-image:url('{{BANNER_URL}}');{{BANNER_CLASS}}"></div>
+        <div class="banner-overlay">
+            <h1 class="banner-title">🌸 鱼小鳄のBLOG</h1>
+            <p class="banner-subtitle">记录我那些不太起眼的日常</p>   
+        </div>
+    </div>
+
+    <!-- 动态线条分隔区 -->
+    <!-- <div class="divider-zone">
+        <canvas id="dividerCanvas"></canvas>
+    </div> -->
+
+    <!-- 樱花层 -->
+    <canvas id="sakuraCanvas"></canvas>
+
+    <!-- TOC 目录侧边栏 -->
+    <nav class="toc-sidebar hidden-toc" id="tocSidebar">
+        <div class="toc-title">📑 目录</div>
+    </nav>
+
+    <!-- 灯箱预览 -->
+    <div class="lightbox" id="lightbox">
+        <span class="lightbox-close" id="lightboxClose">&times;</span>
+        <div id="lightboxMedia"></div>
+    </div>
+
+    <!-- 主体布局 -->
+    <div class="app-container" id="appContainer">
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <div class="sidebar-avatar" id="sidebarAvatar">
+                    {{AVATAR_HTML}}
+                </div>
+                <h3>鱼小鳄sugary</h3>
+                <p>📧 联系我请访问联系页面</p>
+                <p>个性签名：不敬月亮敬自己！</p>
+            </div>
+
+            <nav class="nav-menu">
+                <a href="/" class="nav-item">
+                    <span class="nav-icon">🏠</span> <span>首页</span>
+                </a>
+                <a href="/#/posts" class="nav-item">
+                    <span class="nav-icon">📖</span> <span>文章</span>
+                </a>
+                <a href="/#/gallery" class="nav-item">
+                    <span class="nav-icon">🖼️</span> <span>相册</span>
+                </a>
+                <a href="/#/music" class="nav-item">
+                    <span class="nav-icon">🎵</span> <span>听歌</span>
+                </a>
+                <a href="/#/about" class="nav-item">
+                    <span class="nav-icon">🌸</span> <span>关于</span>
+                </a>
+                <a href="/#/contact" class="nav-item">
+                    <span class="nav-icon">✉️</span> <span>联系</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <span class="sidebar-copy">© 2026 {{SITE_TITLE}}</span>
+            </div>
+        </aside>
+
+        <main class="main-content" id="mainContent">
+            <div class="card">
+                <a href="/#/posts" class="btn btn-outline btn-sm" style="margin-bottom:20px;">← 返回文章列表</a>
+                <h2 style="color:var(--pink-700);">{{TITLE}}</h2>
+                <p style="color:#b89aa6;font-size:13px;margin-bottom:16px;">
+                    📅 {{DATE}} {{TAGS}}
+                </p>
+                <hr style="border-color:rgba(255,180,200,0.3);margin:16px 0;">
+                <div class="post-content">
+                    {{CONTENT}}
+                </div>
+
+                <div class="comment-section" style="margin-top:28px;">
+                    <h3 style="color:var(--pink-600);">💬 评论 (<span id="commentCount">0</span>)</h3>
+                    <div class="comment-list" id="commentList">
+                        <div style="color:#b89aa6;font-size:13px;padding:8px 0;">加载中...</div>
+                    </div>
+                    <div class="comment-form" style="margin-top:12px;">
+                        <div class="comment-form-row" style="display:flex;gap:8px;margin-bottom:8px;">
+                            <input type="text" id="commentName" placeholder="你的昵称" maxlength="20" style="flex:1;padding:10px 14px;border:2px solid var(--border-light);border-radius:12px;outline:none;font-family:inherit;">
+                            <input type="text" id="commentText" placeholder="写下评论..." maxlength="500" style="flex:2;padding:10px 14px;border:2px solid var(--border-light);border-radius:12px;outline:none;font-family:inherit;">
+                        </div>
+                        <div style="display:flex;align-items:center;justify-content:space-between;">
+                            <div style="display:flex;align-items:center;gap:6px;">
+                                <label for="commentImgInput" style="cursor:pointer;color:var(--pink-500);font-size:13px;">📷 添加图片（≤10MB）</label>
+                                <input type="file" id="commentImgInput" accept="image/*" style="display:none">
+                                <img id="commentImgPreview" src="" style="display:none;width:32px;height:32px;border-radius:6px;object-fit:cover;">
+                                <span id="commentImgName" style="font-size:11px;color:#b89aa6;"></span>
+                            </div>
+                            <button class="btn btn-primary btn-sm" id="submitCommentBtn">💬 发表</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <footer>✿ 愿我也能在这个伟大的时代留下一点我的足迹 ✿</footer>
+        </main>
+    </div>
+
+    <script src="/js/bg-canvas.js"></script>
+    <script src="/js/sakura.js"></script>
+    <script>
+(function(){
+    'use strict';
+
+    // 深色模式：读取首页设置的主题偏好
+    (function applySavedTheme() {
+        var theme = localStorage.getItem('blog_theme') || 'auto';
+        var period = theme === 'auto'
+            ? (function () { var h = new Date().getHours(); return (h >= 6 && h < 12) ? 'morning' : (h >= 12 && h < 18) ? 'afternoon' : 'night'; })()
+            : theme;
+        if (period === 'night') {
+            document.body.classList.add('dark-mode');
+        }
+    })();
+
+    // 页面进入：遮罩淡出
+    (function () {
+        var overlay = document.getElementById('postTransition');
+        if (overlay) {
+            setTimeout(function () {
+                overlay.classList.remove('active');
+                setTimeout(function () {
+                    if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+                }, 350);
+            }, 100);
+        }
+    })();
+
+    // 拦截"返回文章列表"链接，遮罩过渡后跳转
+    document.addEventListener('click', function (e) {
+        var link = e.target.closest('a[href="/#/posts"]');
+        if (!link) return;
+        e.preventDefault();
+        var overlay = document.createElement('div');
+        overlay.className = 'page-transition-overlay';
+        document.body.appendChild(overlay);
+        requestAnimationFrame(function () {
+            overlay.classList.add('active');
+        });
+        setTimeout(function () {
+            location.href = '/#/posts';
+        }, 300);
+    });
+
+    var POST_ID = {{POST_ID}};
+    var _commentImgFile = null;
+
+    function escapeHtml(s) {
+        if (!s) return '';
+        var d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    function formatDate(isoStr) {
+        var d = new Date(isoStr);
+        var m = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+        return d.getFullYear()+'年'+m[d.getMonth()]+d.getDate()+'日';
+    }
+
+    function showToast(msg) {
+        var t = document.createElement('div');
+        t.textContent = msg;
+        t.style.cssText = 'position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:rgba(200,70,110,0.9);color:#fff;padding:10px 24px;border-radius:50px;font-size:14px;z-index:200;box-shadow:0 8px 30px rgba(200,70,110,0.35);pointer-events:none;';
+        document.body.appendChild(t);
+        setTimeout(function(){ t.remove(); }, 2200);
+    }
+
+    function openLightbox(url) {
+        var container = document.getElementById('lightboxMedia');
+        container.innerHTML = '';
+        var img = document.createElement('img');
+        img.src = url;
+        img.alt = '预览';
+        container.appendChild(img);
+        document.getElementById('lightbox').classList.add('show');
+    }
+
+    function closeLightbox() {
+        document.getElementById('lightbox').classList.remove('show');
+        document.getElementById('lightboxMedia').innerHTML = '';
+    }
+
+    document.getElementById('lightbox').addEventListener('click', function (e) {
+        if (e.target === this) closeLightbox();
+    });
+    document.getElementById('lightboxClose').addEventListener('click', closeLightbox);
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeLightbox();
+    });
+
+    document.getElementById('commentList').addEventListener('click', function (e) {
+        var img = e.target.closest('.comment-img');
+        if (!img) return;
+        var src = img.getAttribute('data-lightbox');
+        if (src) openLightbox(src);
+    });
+
+    function loadComments() {
+        fetch('/api/comments/' + POST_ID).then(function(r){ return r.json(); }).then(function(cs){
+            document.getElementById('commentCount').textContent = cs.length;
+            var html = '';
+            cs.forEach(function(c){
+                var imgHtml = '';
+                if (c.image) imgHtml = '<img class="comment-img" src="'+c.image+'" alt="图片" data-lightbox="'+c.image+'" style="max-width:200px;border-radius:8px;margin-top:6px;cursor:pointer;">';
+                html += '<div class="comment-item" style="padding:12px 0;border-bottom:1px solid rgba(255,180,200,0.2);">'+
+                    '<div class="comment-author" style="font-weight:600;color:var(--pink-600);">💬 '+escapeHtml(c.author)+'</div>'+
+                    '<div class="comment-text" style="margin:4px 0;color:#5c4d52;">'+escapeHtml(c.content)+'</div>'+
+                    imgHtml+
+                    '<div class="comment-time" style="font-size:11px;color:#b89aa6;">'+formatDate(c.created_at)+'</div>'+
+                    '</div>';
+            });
+            document.getElementById('commentList').innerHTML = html || '<div style="color:#b89aa6;font-size:13px;padding:8px 0;">还没有评论，来抢沙发吧~</div>';
+        }).catch(function(){});
+    }
+
+    document.getElementById('commentImgInput').addEventListener('change', function(e){
+        var file = e.target.files[0];
+        if (!file) return;
+        if (file.size > 10*1024*1024) { showToast('图片不超过10MB'); e.target.value=''; return; }
+        _commentImgFile = file;
+        var reader = new FileReader();
+        reader.onload = function(ev){
+            var p = document.getElementById('commentImgPreview'), n = document.getElementById('commentImgName');
+            if(p){ p.src=ev.target.result; p.style.display='inline-block'; }
+            if(n) n.textContent=file.name;
+        };
+        reader.readAsDataURL(file);
+        e.target.value='';
+    });
+
+    document.getElementById('submitCommentBtn').addEventListener('click', function(){
+        var name = document.getElementById('commentName').value.trim();
+        var text = document.getElementById('commentText').value.trim();
+        if (!name) { showToast('请输入昵称'); return; }
+        if (!text && !_commentImgFile) { showToast('请输入内容或添加图片'); return; }
+
+        var fd = new FormData();
+        fd.append('author', name);
+        fd.append('content', text);
+        if (_commentImgFile) fd.append('image', _commentImgFile);
+
+        fetch('/api/comments/' + POST_ID, { method:'POST', body:fd }).then(function(r){
+            if (!r.ok) return r.json().then(function(d){ throw new Error(d.error||'评论失败'); });
+            return r.json();
+        }).then(function(){
+            _commentImgFile = null;
+            document.getElementById('commentName').value = '';
+            document.getElementById('commentText').value = '';
+            document.getElementById('commentImgPreview').style.display = 'none';
+            document.getElementById('commentImgName').textContent = '';
+            loadComments();
+            showToast('评论发表成功');
+        }).catch(function(err){ showToast(err.message); });
+    });
+
+    loadComments();
+
+    var postImgs = document.querySelectorAll('.post-content img');
+    postImgs.forEach(function(img) {
+        img.style.cursor = 'pointer';
+        img.addEventListener('click', function(e) {
+            e.stopPropagation();
+            openLightbox(img.src);
+        });
+    });
+
+    /* ===== TOC 目录生成 ===== */
+    (function initTOC() {
+        var toc = document.getElementById('tocSidebar');
+        if (!toc) return;
+        var content = document.querySelector('.post-content');
+        if (!content) return;
+
+        var headings = content.querySelectorAll('h1, h2, h3');
+        if (headings.length < 2) return;
+
+        headings.forEach(function (h, i) {
+            var id = 'toc-' + i;
+            h.id = id;
+
+            var a = document.createElement('span');
+            a.className = 'toc-item' + (h.tagName === 'H3' ? ' toc-h3' : '');
+            a.textContent = h.textContent;
+            a.setAttribute('data-target', id);
+            a.addEventListener('click', function () {
+                var target = document.getElementById(this.getAttribute('data-target'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+            toc.appendChild(a);
+        });
+
+        toc.classList.remove('hidden-toc');
+
+        // 滚动高亮
+        var tocItems = toc.querySelectorAll('.toc-item');
+        var observer = new IntersectionObserver(function (entries) {
+            var visibleIds = [];
+            entries.forEach(function (e) {
+                if (e.isIntersecting) visibleIds.push(e.target.id);
+            });
+            if (visibleIds.length === 0) return;
+            tocItems.forEach(function (item) {
+                item.classList.toggle('active', item.getAttribute('data-target') === visibleIds[0]);
+            });
+        }, { rootMargin: '-80px 0px -60% 0px' });
+
+        content.querySelectorAll('h1, h2, h3').forEach(function (h) {
+            observer.observe(h);
+        });
+    })();
+
+    /* ===== 回到顶部 ===== */
+    (function initBackToTop() {
+        var btn = document.createElement('button');
+        btn.className = 'back-to-top';
+        btn.textContent = '↑';
+        btn.title = '回到顶部';
+        document.body.appendChild(btn);
+
+        var ticking = false;
+        window.addEventListener('scroll', function () {
+            if (ticking) return;
+            ticking = true;
+            requestAnimationFrame(function () {
+                btn.classList.toggle('show', window.pageYOffset > 400);
+                ticking = false;
+            });
+        }, { passive: true });
+
+        btn.addEventListener('click', function () {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+    })();
+})();
+    </script>
+</body>
+</html>

@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>🌸 鱼小鳄の个人博客</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- 开场加载动画 -->
+    <div class="loader-screen" id="loaderScreen">
+        <div class="loader-bg-bloom"></div>
+        <div class="loader-content">
+            <div class="loader-logo" id="loaderLogo">🌸</div>
+            <div class="loader-brand">鱼小鳄のBLOG</div>
+            <div class="loader-sub">记录我那些不太起眼的日常</div>
+            <div class="loader-bar-track">
+                <div class="loader-bar-fill" id="loaderBar"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== 全屏 Hero 区域 ========== -->
+    <div class="hero-fullscreen" id="heroFullscreen">
+        <div class="hero-bg-layer" id="heroBgLayer"></div>
+        <div class="hero-oc-wrapper" id="heroOcWrapper">
+            <div class="hero-speech-bubble" id="heroSpeechBubble"></div>
+            <div class="hero-oc-layer" id="heroOcLayer"></div>
+        </div>
+        <div class="hero-ciallo-deco" id="heroCialloDeco">Ciallo～(∠・ω< )⌒⭐</div>
+        <div class="hero-overlay">
+            <!-- 顶部导航栏 -->
+            <div class="hero-navbar" id="heroNavbar">
+                <div class="hero-nav-left">
+                    <div class="hero-nav-avatar" id="heroNavAvatar">
+                        <div class="avatar-placeholder">🌸</div>
+                    </div>
+                    <span class="hero-nav-name">鱼小鳄sugary</span>
+                </div>
+                <div class="hero-nav-period" id="heroPeriodToggle">
+                    <button class="period-btn active" data-period="auto" title="跟随时间">🕐</button>
+                    <button class="period-btn" data-period="morning" title="早晨">☀️</button>
+                    <button class="period-btn" data-period="afternoon" title="下午">🌤️</button>
+                    <button class="period-btn" data-period="night" title="夜晚">🌙</button>
+                </div>
+            </div>
+            <div class="hero-content">
+                <h1 class="hero-title-text">🌸 鱼小鳄のBLOG</h1>
+                <p class="hero-subtitle-text">记录我那些不太起眼的日常</p>
+                <div class="hero-scroll-hint" id="heroScrollHint">
+                    <span>"Deepseek me"</span>
+                    <span class="scroll-arrow">↓</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== 可滚动页面内容 ========== -->
+    <div class="page-content" id="pageContent">
+
+    <!-- 顶部横幅 -->
+    <!-- <div class="banner" id="banner">
+        <div class="banner-img" id="bannerImg"></div>
+        <div class="banner-overlay">
+            <h1 class="banner-title">🌸 鱼小鳄のBLOG</h1>
+            <p class="banner-subtitle">记录我那些不太起眼的日常</p>
+        </div>
+    </div> -->
+
+    <!-- 动态线条分隔区 -->
+    <!-- <div class="divider-zone">
+        <canvas id="dividerCanvas"></canvas>
+    </div> -->
+
+    <!-- 樱花层 -->
+    <canvas id="sakuraCanvas"></canvas>
+
+    <!-- Toast 提示 -->
+    <div class="toast" id="toast"></div>
+
+    <!-- 灯箱预览 -->
+    <div class="lightbox" id="lightbox">
+        <span class="lightbox-close" id="lightboxClose">&times;</span>
+        <div id="lightboxMedia"></div>
+    </div>
+
+    <!-- 主体布局：横幅下方 = 侧边栏 + 内容 -->
+    <div class="app-container" id="appContainer">
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <div class="sidebar-avatar" id="sidebarAvatar">
+                    <div class="avatar-placeholder">🌸</div>
+                </div>
+                <h3>鱼小鳄sugary</h3>
+                <p>📧 联系我请访问联系页面</p>
+                <p>个性签名：不敬月亮敬自己！</p>
+            </div>
+
+            <nav class="nav-menu">
+                <div class="nav-item active" data-page="home">
+                    <span class="nav-icon">🏠</span> <span>首页</span>
+                </div>
+                <div class="nav-item" data-page="posts">
+                    <span class="nav-icon">📖</span> <span>文章</span>
+                </div>
+                <div class="nav-item" data-page="gallery">
+                    <span class="nav-icon">🖼️</span> <span>相册</span>
+                </div>
+                <div class="nav-item" data-page="music">
+                    <span class="nav-icon">🎵</span> <span>听歌</span>
+                </div>
+                <div class="nav-item" data-page="about">
+                    <span class="nav-icon">🌸</span> <span>关于</span>
+                </div>
+                <div class="nav-item" data-page="contact">
+                    <span class="nav-icon">✉️</span> <span>联系</span>
+                </div>
+            </nav>
+
+            <div class="sidebar-footer">
+                <span class="sidebar-copy">© 2026 鱼小鳄sugary</span>
+            </div>
+        </aside>
+
+        <main class="main-content" id="mainContent">
+            <!-- 首页 -->
+            <div class="content-panel active-panel" id="panel-home">
+                <div class="hero-section">
+                    <div class="greeting">✿ 欢迎来到我的小世界 ✿</div>
+                    <h1 class="hero-title">你好，很高兴遇见你</h1>
+                    <p class="subtitle">这里收藏着我的生活、思考与创作</p>
+                    <div class="hero-actions">
+                        <button class="btn btn-primary" data-goto="posts">📖 阅读文章</button>
+                        <button class="btn btn-outline" data-goto="gallery">🖼️ 浏览相册</button>
+                        <button class="btn btn-outline" data-goto="music">🎵 听听歌</button>
+                        <button class="btn btn-outline" data-goto="about">🌸 关于我</button>
+                        <button class="btn btn-outline" data-goto="contact">✉️ 联系我</button>
+                    </div>
+                </div>
+                <div class="stats-row">
+                    <div class="stat-card">
+                        <div class="stat-num" id="statBlogs">0</div>
+                        <div class="stat-label">📝 文章</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-num" id="statPhotos">0</div>
+                        <div class="stat-label">🖼️ 照片/视频</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-num" id="statComments">0</div>
+                        <div class="stat-label">💬 评论</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-num">∞</div>
+                        <div class="stat-label">✨ 无限可能</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 文章 -->
+            <div class="content-panel" id="panel-posts">
+                <div class="post-search" style="margin-bottom:10px;">
+                    <input type="text" id="postSearchInput" class="search-input" placeholder="🔍 搜索文章标题或标签..." autocomplete="off">
+                    <span id="postSearchCount" style="display:none;font-size:12px;color:#b89aa6;margin-left:12px;white-space:nowrap;"></span>
+                </div>
+                <div class="post-filter-bar" id="postFilterBar" style="display:none;">
+                    <div class="filter-section">
+                        <span class="filter-label">🏷️ 标签</span>
+                        <div class="filter-tags" id="filterTags"></div>
+                    </div>
+                    <div class="filter-section" style="margin-top:8px;">
+                        <span class="filter-label">📅 年份</span>
+                        <div class="filter-tags" id="filterYears"></div>
+                    </div>
+                    <button class="filter-clear" id="filterClear" style="display:none;">✕ 清除筛选</button>
+                </div>
+                <div class="blog-list" id="blogList"></div>
+                <div id="blogEmpty" class="card" style="text-align:center;color:#b89aa6;display:none;">
+                    <p>📝 还没有文章，快来写一篇吧！</p>
+                </div>
+            </div>
+
+            <!-- 相册 -->
+            <div class="content-panel" id="panel-gallery">
+                <div class="card">
+                    <h2>🖼️ 相册</h2>
+                    <div class="gallery-grid" id="galleryGrid">
+                        <div style="color:#b89aa6;padding:20px;">暂无内容</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 听歌 -->
+            <div class="content-panel" id="panel-music">
+                <div class="card">
+                    <h2>🎵 听歌</h2>
+                    <div class="music-player">
+                        <div class="music-info" id="musicInfo">
+                            <div class="music-info-text">
+                                <span class="music-title" id="musicTitle">选择一首歌</span>
+                                <span class="music-artist" id="musicArtist">--</span>
+                            </div>
+                            <div class="music-progress" id="musicProgressBar">
+                                <div class="music-progress-fill" id="musicProgressFill"></div>
+                            </div>
+                            <div class="music-time">
+                                <span id="musicCurrentTime">00:00</span>
+                                <span id="musicDuration">00:00</span>
+                            </div>
+                        </div>
+                        <div class="music-controls">
+                            <button class="music-btn" id="musicPrev" title="上一首">⏮</button>
+                            <button class="music-btn music-btn-play" id="musicPlay">▶</button>
+                            <button class="music-btn" id="musicNext" title="下一首">⏭</button>
+                            <button class="music-btn" id="musicMode" title="列表循环">🔁</button>
+                            <div class="music-volume-wrap">
+                                <span class="music-volume-icon">🔊</span>
+                                <input type="range" class="music-volume" id="musicVolume" min="0" max="100" value="30">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="music-lyrics" id="musicLyrics">
+                        <p style="color:#b89aa6;text-align:center;padding:20px 0;">暂无歌词</p>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>📋 播放列表</h3><br>
+                    <div class="music-list" id="musicList">
+                        <div style="color:#b89aa6;padding:12px;text-align:center;">🎵 还没有音乐，等待上传</div>
+                    </div>
+                </div>
+                <audio id="audioPlayer" preload="auto" style="display:none;"></audio>
+            </div>
+
+            <!-- 关于 -->
+            <div class="content-panel" id="panel-about">
+                <div class="card">
+                    <h2>🌸 关于我</h2>
+                    <p>你好呀！欢迎来到我的个人博客。<br><br>
+                    这里是我的一方小天地，记录着我的日常生活、兴趣爱好、旅行见闻，以及偶尔冒出的一些奇思妙想。<br><br>
+                    我相信，生活中的每一个瞬间都值得被记录。无论是清晨的一缕阳光，还是夜晚的一杯暖茶，都是构成我们生命的美好片段。<br><br>
+                    希望在这里，你能找到共鸣，感受到温暖。</p>
+                </div>
+
+                <div class="card">
+                    <h2>💡 关于本站</h2>
+                    <p>
+                        这是一个大一化学专业的入的个人博客⚗️。<br>
+                        粉色为主调，樱花飘落，单纯因为我喜欢😋（武汉特色说是）。<br>
+                        访客可以阅读文章、浏览相册、发表评论，感谢大家多多支持💕。<br><br>
+                        🕊️ 希望我的小破站可以为你带来一些温暖和启发。
+                    </p>
+                </div>
+                <div class="card">
+                    <h2>🎀 兴趣爱好</h2>
+                    <div class="hobby-grid">
+                        <span class="hobby-badge">🐱 猫娘（）</span>
+                        <span class="hobby-badge">🌸 日漫</span>
+                        <span class="hobby-badge">⚗️ 化学</span>
+                        <span class="hobby-badge">🎨 绘画</span>
+                        <span class="hobby-badge">📷 摄影</span>
+                        <span class="hobby-badge">🎵 音乐</span>
+                        <span class="hobby-badge">😋 美食</span>
+                        <span class="hobby-badge">💻 电脑</span>
+                        <span class="hobby-badge">🕹️ 游戏</span>
+                        <span class="hobby-badge">😍 百合</span>
+
+                    </div>
+                </div>
+            </div>
+
+            <!-- 联系 -->
+            <div class="content-panel" id="panel-contact">
+                <div class="card">
+                    <h2>✉️ 联系我</h2>
+                    <div class="contact-row">
+                        <div class="contact-info">
+                            <div class="info-item">
+                                <span class="info-icon">📍</span>
+                                <span>中国</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">📧</span>
+                                <span>通过留言表单联系我</span>
+                            </div>
+                        </div>
+                        <div class="contact-form">
+                            <input type="text" id="contactName" placeholder="你的名字">
+                            <input type="email" id="contactEmail" placeholder="你的邮箱（选填）">
+                            <textarea id="contactMsg" placeholder="想对我说的话..."></textarea>
+                            <button class="btn btn-primary" id="sendMsgBtn">💌 发送留言</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <footer>✿ 虽然我本人是小菜，但还是想在互联网上留下一点我的足迹 ✿</footer>
+        </main>
+    </div>
+
+    </div><!-- /page-content -->
+
+    <!-- 回到顶部 -->
+    <button class="back-to-top" id="backToTop" title="回到顶部">↑</button>
+
+    <!-- 页面切换过渡层 -->
+    <div class="page-transition-overlay" id="pageTransition"></div>
+
+    <script src="js/modal.js"></script>
+    <script src="js/bg-canvas.js"></script>
+    <script src="js/sakura.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
