@@ -4,14 +4,30 @@ const { authMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
 
-// 公开：获取所有文章列表
+// 公开：获取所有文章列表（支持分页）
 router.get('/', (req, res) => {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
     const posts = db.getAllPosts();
-    const result = posts.map(p => ({
+    const total = posts.length;
+    const start = (page - 1) * limit;
+    const end = start + limit;
+    const paginatedPosts = posts.slice(start, end);
+    
+    const result = paginatedPosts.map(p => ({
         ...p,
         commentCount: db.getCommentCount(p.id),
     }));
-    res.json(result);
+    
+    res.json({
+        posts: result,
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasNext: page < Math.ceil(total / limit),
+        hasPrev: page > 1,
+    });
 });
 
 // 公开：获取单篇文章（含 HTML）

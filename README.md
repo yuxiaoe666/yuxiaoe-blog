@@ -47,7 +47,7 @@
 
 1. **克隆项目**
 ```bash
-git clone https://github.com/your-username/your-blog.git
+git clone https://github.com/yuxiaoe666/yuxiaoe-blog.git
 cd blog
 ```
 
@@ -318,3 +318,7 @@ MIT License
 ## 🤝 贡献
 
 欢迎提交 Issue 和 Pull Request！
+
+## 📧 联系方式
+
+如有问题或建议，欢迎通过项目 Issue 联系我。

@@ -4,7 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>{{TITLE}} - 鱼小鳄のBLOG</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌸</text></svg>" type="image/svg+xml">
+    <meta name="description" content="{{DESCRIPTION}}">
+    <meta name="keywords" content="{{META_TAGS}}">
+    <meta name="author" content="鱼小鳄sugary">
     <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/atom-one-pink.min.css">
     <script src="/js/modal.js"></script>
 </head>
 <body>
@@ -83,11 +88,26 @@
                 <a href="/#/posts" class="btn btn-outline btn-sm" style="margin-bottom:20px;">← 返回文章列表</a>
                 <h2 style="color:var(--pink-700);">{{TITLE}}</h2>
                 <p style="color:#b89aa6;font-size:13px;margin-bottom:16px;">
-                    📅 {{DATE}} {{TAGS}}
+                    📅 {{DATE}} · 📝 {{WORD_COUNT}} 字 · ⏱️ {{READ_TIME}} 分钟 {{TAGS}}
                 </p>
                 <hr style="border-color:rgba(255,180,200,0.3);margin:16px 0;">
                 <div class="post-content">
                     {{CONTENT}}
+                </div>
+
+                <div class="share-section" style="margin:20px 0;text-align:center;">
+                    <span style="font-size:13px;color:#b89aa6;margin-right:12px;">分享该文章</span>
+                    <div class="share-buttons">
+                        <!-- <button class="share-btn" data-platform="wechat" title="微信">💬</button>
+                        <button class="share-btn" data-platform="weibo" title="微博">📢</button>
+                        <button class="share-btn" data-platform="qq" title="QQ">🐧</button> -->
+                        <button class="share-btn" data-platform="copylink" title="复制链接">🔗</button>
+                    </div>
+                </div>
+
+                <div class="post-nav" style="display:flex;justify-content:space-between;margin:28px 0;padding:16px 0;border-top:1px solid rgba(255,180,200,0.2);border-bottom:1px solid rgba(255,180,200,0.2);">
+                    {{PREV_POST}}
+                    {{NEXT_POST}}
                 </div>
 
                 <div class="comment-section" style="margin-top:28px;">
@@ -118,8 +138,16 @@
 
     <script src="/js/bg-canvas.js"></script>
     <script src="/js/sakura.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/core.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/javascript.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/html.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/css.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/python.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/bash.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/json.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/markdown.min.js"></script>
     <script>
-(function(){
+    (function(){
     'use strict';
 
     // 深色模式：读取首页设置的主题偏好
@@ -275,6 +303,43 @@
     });
 
     loadComments();
+
+    /* ===== 分享功能 ===== */
+    (function initShare() {
+        var shareBtns = document.querySelectorAll('.share-btn');
+        if (!shareBtns.length) return;
+        
+        shareBtns.forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var platform = this.getAttribute('data-platform');
+                var url = window.location.href;
+                var title = document.querySelector('h2') ? document.querySelector('h2').textContent : '鱼小鳄のBLOG';
+                
+                if (platform === 'copylink') {
+                    navigator.clipboard.writeText(url).then(function () {
+                        showToast('链接已复制到剪贴板');
+                    }).catch(function () {
+                        showToast('复制失败，请手动复制');
+                    });
+                } 
+                // else if (platform === 'wechat') {
+                //     showToast('请在浏览器中打开分享给微信好友');
+                // } else if (platform === 'weibo') {
+                //     var weiboUrl = 'https://service.weibo.com/share/share.php?url=' + encodeURIComponent(url) + '&title=' + encodeURIComponent(title);
+                //     window.open(weiboUrl, '_blank', 'width=600,height=400');
+                // } else if (platform === 'qq') {
+                //     var qqUrl = 'https://connect.qq.com/widget/shareqq/index.html?url=' + encodeURIComponent(url) + '&title=' + encodeURIComponent(title);
+                //     window.open(qqUrl, '_blank', 'width=600,height=400');
+                // }
+            });
+        });
+    })();
+
+    if (window.hljs) {
+        document.querySelectorAll('.post-content pre code').forEach(function(block) {
+            hljs.highlightElement(block);
+        });
+    }
 
     var postImgs = document.querySelectorAll('.post-content img');
     postImgs.forEach(function(img) {

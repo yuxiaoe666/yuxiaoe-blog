@@ -39,8 +39,8 @@ app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "'unsafe-inline'", "https://static.cloudflareinsights.com"],
-            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "https://static.cloudflareinsights.com", "https://cdn.jsdelivr.net"],
+            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net"],
             imgSrc: ["'self'", "data:", "blob:"],
             mediaSrc: ["'self'", "data:", "blob:"],
             fontSrc: ["'self'", "https://fonts.gstatic.com"],
@@ -151,6 +151,45 @@ app.use('/uploads', express.static(uploadsDir, {
     },
 }));
 
+/* ==================== RSS 订阅 ==================== */
+app.get('/rss.xml', (req, res) => {
+    const posts = db.getAllPosts();
+    const settings = db.getAllSettings();
+    const siteTitle = settings.site_title || '鱼小鳄のBLOG';
+    const siteSubtitle = settings.site_subtitle || '记录我那些不太起眼的日常';
+    const baseUrl = req.protocol + '://' + req.get('host');
+
+    const rssItems = posts.map(post => {
+        const content = (post.html || '').replace(/<[^>]*>/g, '').substring(0, 500);
+        const date = new Date(post.date).toISOString();
+        return `
+<item>
+  <title>${escapeHtml(post.title)}</title>
+  <link>${baseUrl}/post/${post.id}</link>
+  <pubDate>${date}</pubDate>
+  <description>${escapeHtml(content)}</description>
+  ${Array.isArray(post.tags) && post.tags.length > 0 
+    ? post.tags.map(tag => `<category>${escapeHtml(tag)}</category>`).join('\n') 
+    : ''}
+</item>`;
+    }).join('\n');
+
+    const rssXml = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+<channel>
+  <title>${escapeHtml(siteTitle)}</title>
+  <description>${escapeHtml(siteSubtitle)}</description>
+  <link>${baseUrl}/</link>
+  <atom:link href="${baseUrl}/rss.xml" rel="self" type="application/rss+xml" />
+  <language>zh-CN</language>
+  ${rssItems}
+</channel>
+</rss>`;
+
+    res.set('Content-Type', 'application/rss+xml');
+    res.send(rssXml);
+});
+
 /* ==================== API 路由 ==================== */
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth', authRoutes);
@@ -201,17 +240,38 @@ app.get('/post/:id', (req, res) => {
     const siteTitle = escapeHtml(settings.site_title || '鱼小鳄sugary');
     const siteSubtitle = escapeHtml(settings.site_subtitle || '记录我那些不太起眼的日常');
 
+    const description = post.html ? post.html.replace(/<[^>]*>/g, '').substring(0, 150).trim() : siteSubtitle;
+    const metaTags = tagsArr.join(', ');
+
+    const { prev, next } = db.getPrevNextPosts(id);
+    const prevHtml = prev 
+        ? `<a href="/post/${prev.id}" class="post-nav-item prev" style="text-decoration:none;color:inherit;"><span class="nav-arrow">←</span><span class="nav-title">${escapeHtml(prev.title)}</span></a>`
+        : '';
+    const nextHtml = next
+        ? `<a href="/post/${next.id}" class="post-nav-item next" style="text-decoration:none;color:inherit;"><span class="nav-title">${escapeHtml(next.title)}</span><span class="nav-arrow">→</span></a>`
+        : '';
+
+    const contentText = (post.html || '').replace(/<[^>]*>/g, '');
+    const wordCount = contentText.length;
+    const readTime = Math.ceil(wordCount / 400);
+
     template = template
         .replace(/{{TITLE}}/g, escapeHtml(post.title))
         .replace(/{{CONTENT}}/g, post.html || '')
         .replace(/{{DATE}}/g, dateStr)
         .replace(/{{TAGS}}/g, tagsHtml)
+        .replace(/{{DESCRIPTION}}/g, escapeHtml(description))
+        .replace(/{{META_TAGS}}/g, escapeHtml(metaTags))
         .replace(/{{POST_ID}}/g, String(id))
         .replace(/{{BANNER_URL}}/g, escapeHtml(bannerUrl))
         .replace(/{{BANNER_CLASS}}/g, bannerClass ? ' ' + escapeHtml(bannerClass) : '')
         .replace(/{{AVATAR_HTML}}/g, avatarHtml)
         .replace(/{{SITE_TITLE}}/g, siteTitle)
-        .replace(/{{SITE_SUBTITLE}}/g, siteSubtitle);
+        .replace(/{{SITE_SUBTITLE}}/g, siteSubtitle)
+        .replace(/{{PREV_POST}}/g, prevHtml)
+        .replace(/{{NEXT_POST}}/g, nextHtml)
+        .replace(/{{WORD_COUNT}}/g, wordCount)
+        .replace(/{{READ_TIME}}/g, readTime);
 
     res.send(template);
 });
@@ -239,6 +299,104 @@ app.use(express.static(STATIC_DIR, {
     },
 }));
 
+/* ==================== 自定义 404 页面 ==================== */
+app.get('/404', (req, res) => {
+    const html = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌸 迷路了？ - 鱼小鳄のBLOG</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌸</text></svg>" type="image/svg+xml">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #fff0f5 0%, #ffe0f0 30%, #ffd6e8 60%, #ffe8f2 100%);
+            font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            color: #4a2c38;
+        }
+        .not-found-container {
+            text-align: center;
+            padding: 40px 20px;
+        }
+        .emoji-404 {
+            font-size: 120px;
+            margin-bottom: 20px;
+            animation: float 3s ease-in-out infinite;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-15px); }
+        }
+        .title-404 {
+            font-size: 48px;
+            font-weight: 700;
+            color: #e85580;
+            margin-bottom: 12px;
+            letter-spacing: 4px;
+        }
+        .subtitle-404 {
+            font-size: 18px;
+            color: #b89aa6;
+            margin-bottom: 30px;
+        }
+        .back-home {
+            display: inline-block;
+            padding: 14px 32px;
+            background: linear-gradient(135deg, #ff6695, #e85580);
+            color: #fff;
+            text-decoration: none;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 600;
+            box-shadow: 0 8px 24px rgba(240, 130, 160, 0.4);
+            transition: all 0.3s ease;
+        }
+        .back-home:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 36px rgba(240, 130, 160, 0.5);
+        }
+        .cherry-blossom {
+            position: fixed;
+            top: -10px;
+            opacity: 0.6;
+            animation: fall linear infinite;
+            font-size: 20px;
+        }
+        @keyframes fall {
+            0% { transform: translateY(0) rotate(0deg); opacity: 0.8; }
+            100% { transform: translateY(100vh) rotate(360deg); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="not-found-container">
+        <div class="emoji-404">🌸</div>
+        <div class="title-404">404</div>
+        <div class="subtitle-404">哎呀，页面迷路了...</div>
+        <a href="/" class="back-home">🏠 返回首页</a>
+    </div>
+    <script>
+        for (var i = 0; i < 12; i++) {
+            var sb = document.createElement('div');
+            sb.className = 'cherry-blossom';
+            sb.textContent = ['🌸', '✿', '❀'][Math.floor(Math.random() * 3)];
+            sb.style.left = Math.random() * 100 + '%';
+            sb.style.animationDuration = (5 + Math.random() * 5) + 's';
+            sb.style.animationDelay = Math.random() * 5 + 's';
+            document.body.appendChild(sb);
+        }
+    </script>
+</body>
+</html>`;
+    res.status(404).send(html);
+});
+
 /* ==================== SPA fallback ==================== */
 app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api/')) {
@@ -249,7 +407,7 @@ app.get('*', (req, res, next) => {
     });
 });
 
-/* ==================== 404 ==================== */
+/* ==================== API 404 ==================== */
 app.use('/api/*', (req, res) => {
     res.status(404).json({ error: '接口不存在' });
 });

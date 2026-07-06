@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>🌸 鱼小鳄の个人博客</title>
+    <title>鱼小鳄の个人博客</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -104,6 +104,9 @@
                 <div class="nav-item" data-page="posts">
                     <span class="nav-icon">📖</span> <span>文章</span>
                 </div>
+                <div class="nav-item" data-page="archives">
+                    <span class="nav-icon">📅</span> <span>归档</span>
+                </div>
                 <div class="nav-item" data-page="gallery">
                     <span class="nav-icon">🖼️</span> <span>相册</span>
                 </div>
@@ -176,6 +179,7 @@
                     <button class="filter-clear" id="filterClear" style="display:none;">✕ 清除筛选</button>
                 </div>
                 <div class="blog-list" id="blogList"></div>
+                <div class="pagination-container" id="postPagination" style="display:none;justify-content:center;gap:8px;margin:24px 0;"></div>
                 <div id="blogEmpty" class="card" style="text-align:center;color:#b89aa6;display:none;">
                     <p>📝 还没有文章，快来写一篇吧！</p>
                 </div>
@@ -237,19 +241,16 @@
             <div class="content-panel" id="panel-about">
                 <div class="card">
                     <h2>🌸 关于我</h2>
-                    <p>你好呀！欢迎来到我的个人博客。<br><br>
-                    这里是我的一方小天地，记录着我的日常生活、兴趣爱好、旅行见闻，以及偶尔冒出的一些奇思妙想。<br><br>
-                    我相信，生活中的每一个瞬间都值得被记录。无论是清晨的一缕阳光，还是夜晚的一杯暖茶，都是构成我们生命的美好片段。<br><br>
-                    希望在这里，你能找到共鸣，感受到温暖。</p>
+                    <p>你好呀！欢迎来到我的个人博客。<br>
                 </div>
 
                 <div class="card">
                     <h2>💡 关于本站</h2>
                     <p>
-                        这是一个大一化学专业的入的个人博客⚗️。<br>
+                        这是一个大一化学专业的入用 agent 搓的个人博客⚗️。<br>
                         粉色为主调，樱花飘落，单纯因为我喜欢😋（武汉特色说是）。<br>
                         访客可以阅读文章、浏览相册、发表评论，感谢大家多多支持💕。<br><br>
-                        🕊️ 希望我的小破站可以为你带来一些温暖和启发。
+                        🕊️ 希望我的小破站可以为你带来一些温暖、启发和帮助。
                     </p>
                 </div>
                 <div class="card">
@@ -310,6 +311,15 @@
     <script src="js/modal.js"></script>
     <script src="js/bg-canvas.js"></script>
     <script src="js/sakura.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lazysizes@5.3.2/lazysizes.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/core.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/javascript.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/html.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/css.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/python.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/bash.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/json.min.js"></script>
+    <script src="js/click-spark.js"></script>
     <script src="js/main.js"></script>
 </body>
 </html>

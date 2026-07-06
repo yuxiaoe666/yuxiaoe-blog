@@ -86,6 +86,16 @@ module.exports = {
         return { ...post, html: readPostHtml(id) };
     },
 
+    getPrevNextPosts(id) {
+        const sorted = [...posts].sort((a, b) => new Date(b.date) - new Date(a.date));
+        const idx = sorted.findIndex(p => p.id === id);
+        if (idx === -1) return { prev: null, next: null };
+        return {
+            prev: idx < sorted.length - 1 ? sorted[idx + 1] : null,
+            next: idx > 0 ? sorted[idx - 1] : null,
+        };
+    },
+
     getPostHtml(id) {
         return readPostHtml(id);
     },

@@ -35,6 +35,7 @@
     var state = {
         page: 'home',
         posts: [],
+        postMeta: { page: 1, limit: 10, total: 0, totalPages: 1, hasNext: false, hasPrev: false },
         gallery: [],
         settings: {},
         filter: { search: '', tags: [], year: null }
@@ -81,6 +82,7 @@
 
         if (route.page === 'home') updateStats();
         else if (route.page === 'posts') loadPosts();
+        else if (route.page === 'archives') loadArchives();
         else if (route.page === 'gallery') loadGallery();
         else if (route.page === 'music') loadMusic();
     }
@@ -148,11 +150,24 @@
     }
 
     /* ==================== 文章列表 ==================== */
-    function fetchPosts() {
-        return apiGet('/posts').then(function (posts) {
-            state.posts = posts;
-            return posts;
-        }).catch(function () { return []; });
+    function fetchPosts(page) {
+        var params = page ? '?page=' + page : '';
+        return apiGet('/posts' + params).then(function (data) {
+            state.posts = data.posts || data;
+            state.postMeta = {
+                page: data.page || 1,
+                limit: data.limit || 10,
+                total: data.total || state.posts.length,
+                totalPages: data.totalPages || 1,
+                hasNext: data.hasNext || false,
+                hasPrev: data.hasPrev || false,
+            };
+            return state.posts;
+        }).catch(function () {
+            state.posts = [];
+            state.postMeta = { page: 1, limit: 10, total: 0, totalPages: 1, hasNext: false, hasPrev: false };
+            return [];
+        });
     }
 
     function loadPosts() {
@@ -324,6 +339,107 @@
             });
             observeNewElements();
         }, 50);
+
+        renderPagination();
+    }
+
+    function renderPagination() {
+        var container = $('postPagination');
+        if (!container) return;
+        
+        var meta = state.postMeta;
+        if (meta.totalPages <= 1) {
+            container.innerHTML = '';
+            container.style.display = 'none';
+            return;
+        }
+        
+        container.style.display = 'flex';
+        var html = '';
+        
+        if (meta.hasPrev) {
+            html += '<button class="pagination-btn" data-page="' + (meta.page - 1) + '">←</button>';
+        } else {
+            html += '<span class="pagination-btn disabled">←</span>';
+        }
+        
+        for (var i = 1; i <= meta.totalPages; i++) {
+            if (i === meta.page) {
+                html += '<span class="pagination-btn active">' + i + '</span>';
+            } else {
+                html += '<button class="pagination-btn" data-page="' + i + '">' + i + '</button>';
+            }
+        }
+        
+        if (meta.hasNext) {
+            html += '<button class="pagination-btn" data-page="' + (meta.page + 1) + '">→</button>';
+        } else {
+            html += '<span class="pagination-btn disabled">→</span>';
+        }
+        
+        container.innerHTML = html;
+        
+        container.onclick = function (e) {
+            var btn = e.target.closest('.pagination-btn:not(.disabled):not(.active)');
+            if (!btn) return;
+            var page = parseInt(btn.getAttribute('data-page'));
+            if (!isNaN(page)) {
+                fetchPosts(page).then(function () {
+                    renderPosts();
+                    buildFilterBar();
+                });
+            }
+        };
+    }
+
+    /* ==================== 归档 ==================== */
+    function loadArchives() {
+        fetchPosts().then(function () {
+            renderArchives();
+        });
+    }
+
+    function renderArchives() {
+        var container = $('archivesTimeline');
+        if (!container) return;
+        
+        if (state.posts.length === 0) {
+            container.innerHTML = '<div style="color:#b89aa6;padding:20px;text-align:center;">📝 还没有文章</div>';
+            return;
+        }
+        
+        var grouped = {};
+        state.posts.forEach(function (post) {
+            var year = new Date(post.date).getFullYear();
+            var month = new Date(post.date).getMonth() + 1;
+            if (!grouped[year]) grouped[year] = {};
+            if (!grouped[year][month]) grouped[year][month] = [];
+            grouped[year][month].push(post);
+        });
+        
+        var years = Object.keys(grouped).sort(function (a, b) { return b - a; });
+        var html = '';
+        
+        years.forEach(function (year) {
+            var months = Object.keys(grouped[year]).sort(function (a, b) { return b - a; });
+            html += '<div class="archive-year">' + year + '年</div>';
+            html += '<div class="archive-months">';
+            months.forEach(function (month) {
+                var posts = grouped[year][month];
+                html += '<div class="archive-month">';
+                html += '<div class="month-header">' + month + '月 <span class="month-count">' + posts.length + '</span></div>';
+                html += '<ul class="month-posts">';
+                posts.forEach(function (post) {
+                    var day = new Date(post.date).getDate();
+                    var tags = Array.isArray(post.tags) ? post.tags : [];
+                    html += '<li><a href="/post/' + post.id + '" style="text-decoration:none;color:inherit;"><span class="post-day">' + day + '</span><span class="post-title">' + escapeHtml(post.title) + '</span></a></li>';
+                });
+                html += '</ul></div>';
+            });
+            html += '</div>';
+        });
+        
+        container.innerHTML = html;
     }
 
     /* ==================== 相册 ==================== */
