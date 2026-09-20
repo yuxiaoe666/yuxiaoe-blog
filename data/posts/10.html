@@ -1,0 +1,156 @@
+<p style="color:var(--pink-700);font-size:1.6rem;margin-bottom:8px;"><strong>内网穿透 + Minecraft 局域网联机：一次 frp 部署记录</strong></p>
+<span style="font-size:1rem;color:var(--pink-500);">朋友从公网连进了我的本机 MC 世界——链路是通的，坑却踩在了最意想不到的地方。</span>
+
+<p style="color:var(--text-muted);font-size:0.95rem;border-left:4px solid var(--pink-400);padding-left:14px;display:inline-block;">
+    <strong>目标</strong>：让朋友通过公网 IP 连进我在本机开的 Minecraft 局域网世界。<br>
+    <strong>工具</strong>：frp（frps 部署在自己的 VPS 上，frpc 跑在本地 Windows）。<br>
+    <strong>结果</strong>：链路跑通，本机双开验证成功，但发现 VPS 在海外导致延迟偏高，留待后续换国内服务器优化。</p>
+
+<hr style="border-color:rgba(255,180,200,0.3);margin:24px 0;">
+
+<h2 style="color:var(--pink-600);border-left:5px solid var(--pink-400);padding-left:14px;font-size:1.35rem;">一、需求背景</h2>
+
+<p>想和朋友远程联机玩 MC，但不想租用现成的联机服务器（比如蓝盾、SakuraFrp 之类的第三方），于是决定自己动手：用 frp 做内网穿透，把本机 MC 的局域网端口映射到自己的 VPS 公网端口上。</p>
+
+<p>核心链路是这样的：</p>
+
+<pre><code class="language-plaintext">朋友 / 第二台设备
+        │
+        ↓
+VPS 公网 IP:27891      ← frps（自己的 VPS）
+        │
+        ↓  frp 隧道
+   frpc（本地 Windows）
+        │
+        ↓
+127.0.0.1:25565        ← Minecraft 局域网世界</code></pre>
+
+<h2 style="color:var(--pink-600);border-left:5px solid var(--pink-400);padding-left:14px;font-size:1.35rem;">二、环境</h2>
+
+<table>
+<tr><th>角色</th><th>位置</th><th>说明</th></tr>
+<tr><td>frps（服务端）</td><td>自己的 VPS</td><td>Ubuntu，systemd 管理，frp 0.71.0</td></tr>
+<tr><td>frpc（客户端）</td><td>本地 Windows</td><td><code>D:\frp\frpc.exe</code></td></tr>
+<tr><td>MC 服务</td><td>本地 Windows</td><td>游戏内「对局域网开放」，监听 25565</td></tr>
+</table>
+
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<p>注：我的 VPS 在新加坡，这是后面延迟高的根源，这是真没办法了我说。</p>
+</blockquote>
+
+<h2 style="color:var(--pink-600);border-left:5px solid var(--pink-400);padding-left:14px;font-size:1.35rem;">三、服务端部署（frps）</h2>
+
+<p>在 VPS 上安装 frp，配置 <code>frps.toml</code>：</p>
+
+<pre><code class="language-toml"># /etc/frp/frps.toml
+bindPort = 7000             # frpc 连接 frps 用的端口
+auth.token = "&lt;你的token&gt;"   # 认证 token，两端必须一致</code></pre>
+
+<p>注册成 systemd 服务并启动：</p>
+
+<pre><code class="language-bash">sudo systemctl enable frps
+sudo systemctl start frps
+sudo systemctl status frps   # 确认 active (running)</code></pre>
+
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<p><strong>⚠️ 重要提醒</strong>：VPS 的云厂商控制面板里一般还有一层<strong>安全组 / 防火墙</strong>，除了系统内放行，还要在面板里放行 <code>bindPort</code>（7000）和后面要用的映射端口（0721），否则外面连不进来。</p>
+</blockquote>
+
+<h2 style="color:var(--pink-600);border-left:5px solid var(--pink-400);padding-left:14px;font-size:1.35rem;">四、客户端部署（frpc）</h2>
+
+<p>本地 Windows 配置 <code>frpc.toml</code>：</p>
+
+<pre><code class="language-toml"># D:\frp\frpc.toml
+serverAddr = "&lt;你的VPS公网IP&gt;"
+serverPort = 7000
+auth.token = "&lt;你的token&gt;"   # 与 frps 一致
+
+[[proxies]]
+name = "mc"                 # 隧道名称，自定义
+type = "tcp"
+localIP = "127.0.0.1"       # 本机 MC 监听地址
+localPort = 25565           # 本机 MC 端口
+remotePort = 0721          # 映射到公网的端口</code></pre>
+
+<p>启动：</p>
+
+<pre><code class="language-plaintext">D:\frp\frpc -c D:\frp\frpc.toml</code></pre>
+
+<p>看到 <code>[mc] start proxy success</code> 就说明隧道建立了。此时 frps 侧日志会显示：</p>
+
+<pre><code class="language-plaintext">[mc] tcp proxy listen port [0721]
+new proxy [mc] type [tcp] success</code></pre>
+
+<h2 style="color:var(--pink-600);border-left:5px solid var(--pink-400);padding-left:14px;font-size:1.35rem;">五、踩坑记录（重点）</h2>
+
+<p>这段才是本文真正有价值的部分——一开始死活连不上，排查了半天，最后发现跟网络完全无关。</p>
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">坑 1：以为「对局域网开放」端口是固定的</h3>
+
+<p>原版 MC 游戏里点「对局域网开放」，端口是<strong>随机分配</strong>的（聊天栏会显示「已在端口 XXXX 上开放」），并不能直接指定成 25565。</p>
+
+<p>我这次实际显示的是 25565，用 <code>netstat -ano | findstr 25565</code> 也确认了监听存在：</p>
+
+<pre><code class="language-plaintext">TCP    0.0.0.0:25565    0.0.0.0:0    LISTENING    22844</code></pre>
+
+<p>但如果你遇到端口随机的情况，要么记下聊天栏显示的那个随机端口去改 frpc 配置，要么用 <code>LAN Server Properties</code> 之类的模组把端口固定下来。</p>
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">坑 2：本机连自己的公网 IP（NAT 回环）</h3>
+
+<p>一开始我从<strong>本机</strong>去连 <code>公网IP:27891</code>，担心会遇到 NAT 回环（hairpin NAT）——内网设备访问自己的公网地址，数据包要「出网再绕回来」，很多路由器不支持，导致连不上。</p>
+
+<p><strong>这个坑其实没踩到</strong>，实测这条路是通的（后来证明 VPS 是独立公网 IP，回环没问题）。但排查时它很干扰判断，值得记一笔：<strong>测试穿透是否成功，最好用另一条网络（比如手机热点）来连，而不是从本机连自己的公网 IP。</strong></p>
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">坑 3（真正的关键）：同名账号冲突，报「该名称已被占用」</h3>
+
+<p>这是最终真相。</p>
+
+<p>我在本机开了两个 MC 实例来测试：A 开房间，B 用 <code>公网IP:27891</code> 连。结果 B 报 <strong>「该名称已被占用」</strong>（英文版 <code>That name is already taken</code>）。</p>
+
+<p>这个报错恰恰说明——<strong>链路已经通了</strong>！数据包成功穿过了 frp 到达 MC A，MC A 也响应了，只是因为它发现「有个同名玩家已经在线」，把 B 踢掉了。</p>
+
+<p>原因：两个实例登录的是<strong>同一个账号</strong>，玩家名和 UUID 完全相同，MC 服务端不允许同名玩家同时在线。</p>
+
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<p><strong>解决办法</strong>：给第二个实例换个名字。用第三方启动器（PCL2 / HMCL / BakaXL）以<strong>离线模式</strong>登录，用户名填个不同的（比如 <code>xxx2</code>），再连就进去了。「对局域网开放」的世界默认不验证正版，离线改名实例可以直接进。</p>
+</blockquote>
+
+<p>复盘一下：这个坑的迷惑性在于，它看起来像「连不上」，其实是「连上了但被拒」。排查时如果只盯着网络层（端口、防火墙、回环），会一直找不到原因。</p>
+
+<h2 style="color:var(--pink-600);border-left:5px solid var(--pink-400);padding-left:14px;font-size:1.35rem;">六、验证结果</h2>
+
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<p>✅ frpc 日志出现 <code>start proxy success</code>，frps 日志出现 <code>listen port [27891]</code><br>
+✅ 本机双开，第二个实例换名后成功连入<br>
+✅ 整条链路 <code>公网IP:27891 → frps → frpc → 127.0.0.1:25565</code> 打通</p>
+</blockquote>
+
+<h2 style="color:var(--pink-600);border-left:5px solid var(--pink-400);padding-left:14px;font-size:1.35rem;">七、遗留问题：延迟</h2>
+
+<p>当前 VPS 在新加坡，国内连过去物理距离远，MC 这种实时游戏对延迟很敏感，所以玩起来偏卡。</p>
+
+<p>后续计划：换一台<strong>国内服务器</strong>（同省 / 同运营商最佳），延迟能压到十几毫秒。需要注意：</p>
+
+<ol>
+<li>国内服务器开公网端口，正规途径需要<strong>备案</strong>；</li>
+<li>安全组记得放行 7000 和 27891；</li>
+<li>原版 MC 局域网是 TCP，目前用 <code>type = "tcp"</code> 就够，不必折腾 UDP。</li>
+</ol>
+
+<h2 style="color:var(--pink-600);border-left:5px solid var(--pink-400);padding-left:14px;font-size:1.35rem;">八、总结</h2>
+
+<ol>
+<li>frp 部署本身不难，难的是<strong>排查方向</strong>——这次真正的障碍是 MC 的账号同名机制，而不是网络。</li>
+<li>报错要看本质：「该名称已被占用」= 连上了但被同名检测拒绝，别把它当成网络不通。</li>
+<li>测试穿透用<strong>独立网络</strong>（手机热点）最可靠，别只在本机自连自测。</li>
+<li>海外 VPS 做游戏联机延迟是硬伤，真要玩还是得上国内服务器。</li>
+</ol>
+
+<p>希望这篇记录能帮你少走弯路。但最近我们学校企业微信说学校算力平台少用 frp ，向日葵远程这些，不然容易被攻击😅，不过目前那个算力平台我用得不算太多啊，不过后面等我把ai生图从本地部署转移到服务器上去的时候，估计就可以美美出图了😋</p>
+
+<div style="border-radius:20px;padding:1.2rem 1.8rem;margin:2rem 0 1rem;text-align:center;font-size:0.95rem;border:1px solid rgba(255,180,200,0.25);">
+    <p>有一说一我觉得这个真挺有用的，尤其是我们宿舍现在已经所有人都在玩mc了😋
+</div>
+
+<p style="text-align:right;">——鱼小鳄Sugary</p>
+<p style="text-align:right;">——2026年9月10日</p>

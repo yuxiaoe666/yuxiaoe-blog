@@ -9,6 +9,7 @@ const GALLERY_FILE = path.join(DATA_DIR, 'gallery.json');
 const MUSIC_FILE = path.join(DATA_DIR, 'music.json');
 const CONTACTS_FILE = path.join(DATA_DIR, 'contacts.json');
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
+const VISITORS_FILE = path.join(DATA_DIR, 'visitors.json');
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(POSTS_DIR)) fs.mkdirSync(POSTS_DIR, { recursive: true });
@@ -34,6 +35,7 @@ let gallery = safeRead(GALLERY_FILE, []);
 let music = safeRead(MUSIC_FILE, []);
 let contacts = safeRead(CONTACTS_FILE, []);
 let settings = safeRead(SETTINGS_FILE, {});
+let visitors = safeRead(VISITORS_FILE, { count: 0 });
 
 const defaultSettings = {
     banner: '',
@@ -252,6 +254,17 @@ module.exports = {
         contacts.splice(idx, 1);
         safeWrite(CONTACTS_FILE, contacts);
         return true;
+    },
+
+    // ========== 访客计数 ==========
+    getVisitorCount() {
+        return visitors.count || 0;
+    },
+
+    addVisitor() {
+        visitors.count = (visitors.count || 0) + 1;
+        safeWrite(VISITORS_FILE, visitors);
+        return visitors.count;
     },
 
     // ========== 设置 ==========

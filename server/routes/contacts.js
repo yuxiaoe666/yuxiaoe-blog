@@ -24,6 +24,19 @@ router.post('/', commentLimiter, (req, res) => {
     res.status(201).json({ message: '留言已发送' });
 });
 
+// 侧边栏只展示最近留言的公开摘要，不返回邮箱等管理字段
+router.get('/public', (req, res) => {
+    const allMessages = db.getAllContacts();
+    const requestedLimit = parseInt(req.query.limit, 10);
+    const safeLimit = Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 50) : 5;
+    const safeMessages = allMessages.slice(0, safeLimit).map(item => ({
+        name: item.name,
+        message: item.message,
+        created_at: item.created_at,
+    }));
+    res.json({ total: allMessages.length, items: safeMessages });
+});
+
 router.get('/', authMiddleware, (req, res) => {
     res.json(db.getAllContacts());
 });

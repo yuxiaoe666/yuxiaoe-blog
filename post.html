@@ -1,4 +1,3 @@
-<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -8,31 +7,57 @@
     <meta name="description" content="{{DESCRIPTION}}">
     <meta name="keywords" content="{{META_TAGS}}">
     <meta name="author" content="鱼小鳄sugary">
+{{OG_META}}
     <link rel="stylesheet" href="/css/style.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/atom-one-pink.min.css">
     <script src="/js/modal.js"></script>
 </head>
 <body>
 
+    <!-- 首屏前预应用主题，避免跳转衔接时闪粉 -->
+    <script>
+    (function () {
+        try {
+            var legacy = localStorage.getItem('blog_theme') || 'auto';
+            var weather = localStorage.getItem('blog_weather') || (legacy === 'winter' ? 'snow' : 'sakura');
+            var period = localStorage.getItem('blog_period') || (legacy === 'morning' || legacy === 'afternoon' || legacy === 'night' ? legacy : 'auto');
+            var h = new Date().getHours();
+            var effectivePeriod = period === 'auto' ? (h < 6 || h >= 18 ? 'night' : (h < 12 ? 'morning' : 'afternoon')) : period;
+            if (weather === 'snow') document.body.classList.add('snow-mode', 'winter-mode');
+var emoji = weather === 'snow' ? '\u2744\ufe0f' : '\ud83c\udf38';
+            var icon = document.querySelector('link[rel="icon"]');
+            if (icon) icon.href = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>" + emoji + "</text></svg>";
+            if (effectivePeriod === 'night') {
+                document.body.classList.add('dark-mode');
+            }
+        } catch (e) { /* ignore */ }
+    })();
+    </script>
+
     <!-- 过渡遮罩 -->
     <div class="page-transition-overlay active" id="postTransition"></div>
+
+    <!-- 阅读进度条 -->
+    <div class="reading-progress" id="readingProgress">
+        <div class="reading-progress-bar" id="readingProgressBar"></div>
+        <div class="reading-progress-avatar" id="readingProgressAvatar" aria-hidden="true">
+            <img src="{{AVATAR_URL}}" alt="">
+        </div>
+    </div>
 
     <!-- 顶部横幅 -->
     <div class="banner" id="banner">
         <div class="banner-img" id="bannerImg" style="background-image:url('{{BANNER_URL}}');{{BANNER_CLASS}}"></div>
         <div class="banner-overlay">
-            <h1 class="banner-title">🌸 鱼小鳄のBLOG</h1>
+            <h1 class="banner-title"><span class="banner-title-mark" id="bannerTitleMark">🌸</span> 鱼小鳄のBLOG</h1>
             <p class="banner-subtitle">记录我那些不太起眼的日常</p>   
         </div>
     </div>
 
-    <!-- 动态线条分隔区 -->
-    <!-- <div class="divider-zone">
-        <canvas id="dividerCanvas"></canvas>
-    </div> -->
-
     <!-- 樱花层 -->
     <canvas id="sakuraCanvas"></canvas>
+
+    <!-- 雪花层（冬季主题） -->
+    <canvas id="snowCanvas"></canvas>
 
     <!-- TOC 目录侧边栏 -->
     <nav class="toc-sidebar hidden-toc" id="tocSidebar">
@@ -53,7 +78,7 @@
                     {{AVATAR_HTML}}
                 </div>
                 <h3>鱼小鳄sugary</h3>
-                <p>📧 联系我请访问联系页面</p>
+                <p>B站：<a href="https://space.bilibili.com/580795858" target="_blank">鱼小鳄鸭</a></p>
                 <p>个性签名：不敬月亮敬自己！</p>
             </div>
 
@@ -74,11 +99,19 @@
                     <span class="nav-icon">🌸</span> <span>关于</span>
                 </a>
                 <a href="/#/contact" class="nav-item">
-                    <span class="nav-icon">✉️</span> <span>联系</span>
+                    <span class="nav-icon">💬</span> <span>留言板</span>
+                </a>
+                <a href="/#/friends" class="nav-item">
+                    <span class="nav-icon">🔗</span> <span>友链</span>
                 </a>
             </nav>
 
             <div class="sidebar-footer">
+                <span class="sidebar-quote" id="sidebarQuote"></span>
+                <div class="life-details">
+                    <span id="siteDays">🌱 已陪伴 0 天</span>
+                    <span id="siteVisitors">👀 第 0 位访客</span>
+                </div>
                 <span class="sidebar-copy">© 2026 {{SITE_TITLE}}</span>
             </div>
         </aside>
@@ -87,16 +120,16 @@
             <div class="card">
                 <a href="/#/posts" class="btn btn-outline btn-sm" style="margin-bottom:20px;">← 返回文章列表</a>
                 <h2 style="color:var(--pink-700);">{{TITLE}}</h2>
-                <p style="color:#b89aa6;font-size:13px;margin-bottom:16px;">
+                <p style="color:var(--text-muted);font-size:13px;margin-bottom:16px;">
                     📅 {{DATE}} · 📝 {{WORD_COUNT}} 字 · ⏱️ {{READ_TIME}} 分钟 {{TAGS}}
                 </p>
-                <hr style="border-color:rgba(255,180,200,0.3);margin:16px 0;">
+                <hr style="border-color:var(--border-light);margin:16px 0;">
                 <div class="post-content">
                     {{CONTENT}}
                 </div>
 
                 <div class="share-section" style="margin:20px 0;text-align:center;">
-                    <span style="font-size:13px;color:#b89aa6;margin-right:12px;">分享该文章</span>
+                    <span style="font-size:13px;color:var(--text-muted);margin-right:12px;">分享该文章</span>
                     <div class="share-buttons">
                         <!-- <button class="share-btn" data-platform="wechat" title="微信">💬</button>
                         <button class="share-btn" data-platform="weibo" title="微博">📢</button>
@@ -105,7 +138,7 @@
                     </div>
                 </div>
 
-                <div class="post-nav" style="display:flex;justify-content:space-between;margin:28px 0;padding:16px 0;border-top:1px solid rgba(255,180,200,0.2);border-bottom:1px solid rgba(255,180,200,0.2);">
+                <div class="post-nav" style="display:flex;justify-content:space-between;margin:28px 0;padding:16px 0;border-top:1px solid var(--border-light);border-bottom:1px solid var(--border-light);">
                     {{PREV_POST}}
                     {{NEXT_POST}}
                 </div>
@@ -113,7 +146,7 @@
                 <div class="comment-section" style="margin-top:28px;">
                     <h3 style="color:var(--pink-600);">💬 评论 (<span id="commentCount">0</span>)</h3>
                     <div class="comment-list" id="commentList">
-                        <div style="color:#b89aa6;font-size:13px;padding:8px 0;">加载中...</div>
+                        <div style="color:var(--text-muted);font-size:13px;padding:8px 0;">加载中...</div>
                     </div>
                     <div class="comment-form" style="margin-top:12px;">
                         <div class="comment-form-row" style="display:flex;gap:8px;margin-bottom:8px;">
@@ -125,7 +158,7 @@
                                 <label for="commentImgInput" style="cursor:pointer;color:var(--pink-500);font-size:13px;">📷 添加图片（≤10MB）</label>
                                 <input type="file" id="commentImgInput" accept="image/*" style="display:none">
                                 <img id="commentImgPreview" src="" style="display:none;width:32px;height:32px;border-radius:6px;object-fit:cover;">
-                                <span id="commentImgName" style="font-size:11px;color:#b89aa6;"></span>
+                                <span id="commentImgName" style="font-size:11px;color:var(--text-muted);"></span>
                             </div>
                             <button class="btn btn-primary btn-sm" id="submitCommentBtn">💬 发表</button>
                         </div>
@@ -136,29 +169,44 @@
         </main>
     </div>
 
-    <script src="/js/bg-canvas.js"></script>
     <script src="/js/sakura.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/core.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/javascript.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/html.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/css.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/python.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/bash.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/json.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/markdown.min.js"></script>
+    <script src="/js/snow.js"></script>
+    <script src="/js/vendor/highlight.min.js"></script>
+    <script src="/js/mood.js"></script>
+    <script src="/js/life.js"></script>
     <script>
     (function(){
     'use strict';
 
-    // 深色模式：读取首页设置的主题偏好
+    // 主题同步：读取首页设置的天气与明暗偏好
     (function applySavedTheme() {
-        var theme = localStorage.getItem('blog_theme') || 'auto';
-        var period = theme === 'auto'
-            ? (function () { var h = new Date().getHours(); return (h >= 6 && h < 12) ? 'morning' : (h >= 12 && h < 18) ? 'afternoon' : 'night'; })()
-            : theme;
-        if (period === 'night') {
+        var legacy = localStorage.getItem('blog_theme') || 'auto';
+        var weather = localStorage.getItem('blog_weather') || (legacy === 'winter' ? 'snow' : 'sakura');
+        var period = localStorage.getItem('blog_period') || (legacy === 'morning' || legacy === 'afternoon' || legacy === 'night' ? legacy : 'auto');
+        var h = new Date().getHours();
+        var effectivePeriod = period === 'auto' ? (h < 6 || h >= 18 ? 'night' : (h < 12 ? 'morning' : 'afternoon')) : period;
+        var isDark = effectivePeriod === 'night';
+        if (isDark) {
             document.body.classList.add('dark-mode');
+        } else {
+            document.body.classList.remove('dark-mode');
         }
+        if (weather === 'snow') {
+            document.body.classList.add('snow-mode', 'winter-mode');
+            if (window.Blog && window.Blog.snow) window.Blog.snow.start();
+            if (window.Blog && window.Blog.sakura) window.Blog.sakura.stop();
+        } else {
+            document.body.classList.remove('snow-mode', 'winter-mode');
+            if (window.Blog && window.Blog.snow) window.Blog.snow.stop();
+            if (window.Blog && window.Blog.sakura) window.Blog.sakura.start();
+        }
+
+        /* \u6807\u8bb0\u4e0e favicon \u8ddf\u968f\u5929\u6c14\u5207\u6362 */
+        var emoji = weather === 'snow' ? '\u2744\ufe0f' : '\ud83c\udf38';
+        var mark = document.getElementById('bannerTitleMark');
+        if (mark) mark.textContent = emoji;
+        var icon = document.querySelector('link[rel="icon"]');
+        if (icon) icon.href = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>" + emoji + "</text></svg>";
     })();
 
     // 页面进入：遮罩淡出
@@ -208,10 +256,14 @@
 
     function showToast(msg) {
         var t = document.createElement('div');
+        t.className = 'post-toast';
         t.textContent = msg;
-        t.style.cssText = 'position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:rgba(200,70,110,0.9);color:#fff;padding:10px 24px;border-radius:50px;font-size:14px;z-index:200;box-shadow:0 8px 30px rgba(200,70,110,0.35);pointer-events:none;';
         document.body.appendChild(t);
-        setTimeout(function(){ t.remove(); }, 2200);
+        requestAnimationFrame(function () { t.classList.add('show'); });
+        setTimeout(function () {
+            t.classList.remove('show');
+            setTimeout(function () { t.remove(); }, 320);
+        }, 2200);
     }
 
     function openLightbox(url) {
@@ -251,14 +303,14 @@
             cs.forEach(function(c){
                 var imgHtml = '';
                 if (c.image) imgHtml = '<img class="comment-img" src="'+c.image+'" alt="图片" data-lightbox="'+c.image+'" style="max-width:200px;border-radius:8px;margin-top:6px;cursor:pointer;">';
-                html += '<div class="comment-item" style="padding:12px 0;border-bottom:1px solid rgba(255,180,200,0.2);">'+
+                html += '<div class="comment-item" style="padding:12px 0;border-bottom:1px solid var(--border-light);">'+
                     '<div class="comment-author" style="font-weight:600;color:var(--pink-600);">💬 '+escapeHtml(c.author)+'</div>'+
-                    '<div class="comment-text" style="margin:4px 0;color:#5c4d52;">'+escapeHtml(c.content)+'</div>'+
+                    '<div class="comment-text" style="margin:4px 0;color:var(--text-primary);">'+escapeHtml(c.content)+'</div>'+
                     imgHtml+
-                    '<div class="comment-time" style="font-size:11px;color:#b89aa6;">'+formatDate(c.created_at)+'</div>'+
+                    '<div class="comment-time" style="font-size:11px;color:var(--text-muted);">'+formatDate(c.created_at)+'</div>'+
                     '</div>';
             });
-            document.getElementById('commentList').innerHTML = html || '<div style="color:#b89aa6;font-size:13px;padding:8px 0;">还没有评论，来抢沙发吧~</div>';
+            document.getElementById('commentList').innerHTML = html || '<div style="color:var(--text-muted);font-size:13px;padding:8px 0;">还没有评论，来抢沙发吧~</div>';
         }).catch(function(){});
     }
 
@@ -418,6 +470,40 @@
         btn.addEventListener('click', function () {
             window.scrollTo({ top: 0, behavior: 'smooth' });
         });
+    })();
+
+    /* ===== 阅读进度条 ===== */
+    (function initReadingProgress() {
+        var bar = document.getElementById('readingProgressBar');
+        if (!bar) return;
+        var avatar = document.getElementById('readingProgressAvatar');
+        var doc = document.documentElement;
+        var ticking = false;
+
+        function update() {
+            ticking = false;
+            var max = doc.scrollHeight - window.innerHeight;
+            var pct = max > 0 ? (window.pageYOffset / max) * 100 : 0;
+            pct = Math.min(100, Math.max(0, pct));
+            bar.style.width = pct + '%';
+            if (!avatar) return;
+            var viewport = doc.clientWidth || window.innerWidth || 0;
+            var edge = (avatar.offsetWidth / 2) || 15;
+            var x = (pct / 100) * viewport;
+            x = Math.min(viewport - edge, Math.max(edge, x));
+            avatar.style.left = x + 'px';
+            avatar.classList.toggle('visible', window.pageYOffset > 80);
+        }
+
+        function onScroll() {
+            if (ticking) return;
+            ticking = true;
+            requestAnimationFrame(update);
+        }
+
+        window.addEventListener('scroll', onScroll, { passive: true });
+        window.addEventListener('resize', onScroll);
+        update();
     })();
 })();
     </script>

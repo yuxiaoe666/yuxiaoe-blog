@@ -1,6 +1,12 @@
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'blog_jwt_secret_2026';
+// JWT 密钥只允许来自 .env：硬编码的默认密钥一旦随仓库公开，任何人都能伪造管理员令牌
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET || JWT_SECRET.length < 16) {
+    console.error('[配置错误] 请在 server/.env 中设置长度不少于 16 位的随机 JWT_SECRET，然后重新启动服务。');
+    console.error('生成示例: node -e "console.log(require(\'crypto\').randomBytes(48).toString(\'hex\'))"');
+    process.exit(1);
+}
 
 function generateToken(payload) {
     return jwt.sign(payload, JWT_SECRET, { expiresIn: '24h' });

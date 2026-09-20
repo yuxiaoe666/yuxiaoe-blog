@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理面板 · 鱼小鳄のBLOG</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚙️</text></svg>" type="image/svg+xml">
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+
+    <!-- ========== 登录遮罩 ========== -->
+    <div class="login-overlay" id="loginOverlay">
+        <form class="login-card" id="loginForm" autocomplete="on">
+            <div class="login-logo">⚙️</div>
+            <h1>管理面板</h1>
+            <p class="login-sub">鱼小鳄のBLOG · 仅站长可用</p>
+
+            <label class="field">
+                <span>用户名</span>
+                <input type="text" id="loginUsername" name="username" autocomplete="username" placeholder="ADMIN_USERNAME" required>
+            </label>
+            <label class="field">
+                <span>密码</span>
+                <input type="password" id="loginPassword" name="password" autocomplete="current-password" placeholder="ADMIN_PASSWORD" required>
+            </label>
+
+            <button class="btn btn-primary btn-block" type="submit" id="loginSubmit">🔓 登录</button>
+            <p class="login-error" id="loginError" hidden></p>
+            <p class="login-hint">
+                账号来自 <code>server/.env</code> 的 <code>ADMIN_USERNAME</code> 与
+                <code>ADMIN_PASSWORD_HASH</code>（密码以 bcrypt 哈希保存，无法反推）。
+            </p>
+            <a class="login-back" href="/">← 返回博客首页</a>
+        </form>
+    </div>
+
+    <!-- ========== 主界面 ========== -->
+    <div class="admin-shell" id="adminShell" hidden>
+        <header class="admin-topbar">
+            <div class="topbar-left">
+                <span class="topbar-logo">⚙️</span>
+                <div>
+                    <strong>管理面板</strong>
+                    <small id="topbarUser">未登录</small>
+                </div>
+            </div>
+            <div class="topbar-right">
+                <a class="btn btn-ghost" href="/" target="_blank" rel="noopener">🏠 查看站点</a>
+                <button class="btn btn-ghost" id="btnReload" type="button">🔄 刷新数据</button>
+                <button class="btn btn-danger-ghost" id="btnLogout" type="button">🚪 退出登录</button>
+            </div>
+        </header>
+
+        <div class="admin-main">
+            <nav class="admin-nav" id="adminNav">
+                <button class="nav-btn active" type="button" data-tab="overview"><span>📊</span>概览</button>
+                <button class="nav-btn" type="button" data-tab="posts"><span>📝</span>文章</button>
+                <button class="nav-btn" type="button" data-tab="comments"><span>💬</span>评论</button>
+                <button class="nav-btn" type="button" data-tab="gallery"><span>🖼️</span>相册</button>
+                <button class="nav-btn" type="button" data-tab="music"><span>🎵</span>音乐</button>
+                <button class="nav-btn" type="button" data-tab="contacts"><span>💌</span>留言</button>
+                <button class="nav-btn" type="button" data-tab="settings"><span>🎨</span>站点设置</button>
+                <button class="nav-btn" type="button" data-tab="health"><span>🩺</span>接口自检</button>
+            </nav>
+
+            <main class="admin-content">
+
+                <!-- ===== 概览 ===== -->
+                <section class="tab-panel active" id="tab-overview">
+                    <h2>📊 站点概览</h2>
+                    <div class="stat-grid" id="statGrid"></div>
+
+                    <div class="card">
+                        <div class="card-head">
+                            <h3>🕒 最近文章</h3>
+                            <button class="btn btn-sm btn-outline" type="button" data-goto-tab="posts">前往管理 →</button>
+                        </div>
+                        <div id="overviewPosts" class="list-simple"></div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-head">
+                            <h3>🔑 当前登录信息</h3>
+                        </div>
+                        <dl class="kv" id="overviewAuth"></dl>
+                    </div>
+                </section>
+
+                <!-- ===== 文章 ===== -->
+                <section class="tab-panel" id="tab-posts">
+                    <h2>📝 文章管理</h2>
+
+                    <div class="card">
+                        <div class="card-head">
+                            <h3 id="postEditorTitle">新建文章</h3>
+                            <div class="card-actions">
+                                <button class="btn btn-sm btn-outline" type="button" id="btnPostNew">➕ 新建</button>
+                                <button class="btn btn-sm btn-outline" type="button" id="btnPostPreview">👁 预览</button>
+                            </div>
+                        </div>
+
+                        <div class="form-grid">
+                            <label class="field">
+                                <span>标题</span>
+                                <input type="text" id="postTitle" maxlength="200" placeholder="文章标题">
+                            </label>
+                            <label class="field">
+                                <span>日期</span>
+                                <input type="date" id="postDate">
+                            </label>
+                        </div>
+
+                        <label class="field">
+                            <span>标签（用逗号分隔）</span>
+                            <input type="text" id="postTags" placeholder="生活, 随笔">
+                        </label>
+
+                        <label class="field">
+                            <span>正文（支持 HTML）</span>
+                            <textarea id="postContent" rows="16" placeholder="<p>Hello World</p>"></textarea>
+                        </label>
+
+                        <div class="form-actions">
+                            <button class="btn btn-primary" type="button" id="btnPostSave">💾 保存文章</button>
+                            <button class="btn btn-outline" type="button" id="btnPostReset">↩️ 清空表单</button>
+                            <label class="btn btn-outline file-btn">
+                                🖼️ 上传并插入图片
+                                <input type="file" id="postImageInput" accept="image/*" hidden>
+                            </label>
+                            <span class="hint" id="postEditorHint"></span>
+                        </div>
+
+                        <div class="preview-box" id="postPreviewBox" hidden>
+                            <iframe id="postPreviewFrame" sandbox title="文章预览"></iframe>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-head">
+                            <h3>全部文章 <span class="badge" id="postCountBadge">0</span></h3>
+                            <input class="search-input-sm" type="search" id="postFilterInput" placeholder="🔍 筛选标题 / 标签">
+                        </div>
+                        <div class="table-wrap">
+                            <table class="data-table">
+                                <thead>
+                                    <tr><th>ID</th><th>标题</th><th>日期</th><th>标签</th><th>评论</th><th class="col-actions">操作</th></tr>
+                                </thead>
+                                <tbody id="postTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ===== 评论 ===== -->
+                <section class="tab-panel" id="tab-comments">
+                    <h2>💬 评论管理</h2>
+                    <div class="card">
+                        <div class="card-head">
+                            <h3>全部评论 <span class="badge" id="commentCountBadge">0</span></h3>
+                            <div class="card-actions">
+                                <select class="select" id="commentClearSelect"></select>
+                                <button class="btn btn-sm btn-danger" type="button" id="btnCommentClear">🗑️ 清空该文章评论</button>
+                            </div>
+                        </div>
+                        <div class="table-wrap">
+                            <table class="data-table">
+                                <thead>
+                                    <tr><th>ID</th><th>文章</th><th>作者</th><th>内容</th><th>时间</th><th class="col-actions">操作</th></tr>
+                                </thead>
+                                <tbody id="commentTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ===== 相册 ===== -->
+                <section class="tab-panel" id="tab-gallery">
+                    <h2>🖼️ 相册管理</h2>
+                    <div class="card">
+                        <div class="card-head"><h3>上传图片 / 视频</h3></div>
+                        <div class="form-actions">
+                            <label class="btn btn-outline file-btn">
+                                📤 选择文件并上传
+                                <input type="file" id="galleryFileInput" accept="image/*,video/mp4,video/webm" hidden>
+                            </label>
+                            <span class="hint">支持 jpg / png / gif / webp / mp4 / webm，单文件 ≤ 10MB</span>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-head">
+                            <h3>图库项目 <span class="badge" id="galleryCountBadge">0</span></h3>
+                            <span class="hint">删除会同时移除服务器上的文件</span>
+                        </div>
+                        <div class="gallery-admin-grid" id="galleryAdminGrid"></div>
+                    </div>
+                </section>
+
+                <!-- ===== 音乐 ===== -->
+                <section class="tab-panel" id="tab-music">
+                    <h2>🎵 音乐管理</h2>
+                    <div class="card">
+                        <div class="card-head"><h3>上传音乐</h3></div>
+                        <div class="form-grid">
+                            <label class="field">
+                                <span>歌曲名（留空则用文件名）</span>
+                                <input type="text" id="musicTitleInput" placeholder="例：動く、動く">
+                            </label>
+                            <label class="field">
+                                <span>歌手</span>
+                                <input type="text" id="musicArtistInput" placeholder="例：水濑祈">
+                            </label>
+                        </div>
+                        <div class="form-actions">
+                            <label class="btn btn-outline file-btn">
+                                📤 选择音频并上传
+                                <input type="file" id="musicFileInput" accept="audio/*" hidden>
+                            </label>
+                            <span class="hint">支持 mp3 / wav / ogg / flac / m4a / aac / wma，单文件 ≤ 50MB</span>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-head">
+                            <h3>曲库 <span class="badge" id="musicCountBadge">0</span></h3>
+                            <span class="hint">点播放可直接试听，点歌词可编辑 LRC</span>
+                        </div>
+                        <div class="music-admin-list" id="musicAdminList"></div>
+                    </div>
+                </section>
+
+                <!-- ===== 留言 ===== -->
+                <section class="tab-panel" id="tab-contacts">
+                    <h2>💌 留言板管理</h2>
+                    <div class="card">
+                        <div class="card-head"><h3>全部留言 <span class="badge" id="contactCountBadge">0</span></h3></div>
+                        <div class="table-wrap">
+                            <table class="data-table">
+                                <thead>
+                                    <tr><th>ID</th><th>名字</th><th>邮箱</th><th>内容</th><th>时间</th><th class="col-actions">操作</th></tr>
+                                </thead>
+                                <tbody id="contactTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ===== 站点设置 ===== -->
+                <section class="tab-panel" id="tab-settings">
+                    <h2>🎨 站点设置</h2>
+                    <div class="card">
+                        <div class="card-head"><h3>基础信息</h3></div>
+                        <div class="form-grid">
+                            <label class="field">
+                                <span>站点标题</span>
+                                <input type="text" id="setSiteTitle" placeholder="鱼小鳄sugary">
+                            </label>
+                            <label class="field">
+                                <span>站点副标题</span>
+                                <input type="text" id="setSiteSubtitle" placeholder="记录我那些不太起眼的日常">
+                            </label>
+                        </div>
+
+                        <div class="form-grid">
+                            <div class="field">
+                                <span>头像</span>
+                                <div class="input-with-action">
+                                    <input type="text" id="setAvatar" placeholder="/uploads/gallery/xxx.jpg">
+                                    <label class="btn btn-sm btn-outline file-btn">
+                                        ⬆️ 上传
+                                        <input type="file" id="avatarUploadInput" accept="image/*" hidden>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="field">
+                                <span>横幅图（文章页顶部）</span>
+                                <div class="input-with-action">
+                                    <input type="text" id="setBanner" placeholder="/uploads/settings/xxx.jpg">
+                                    <label class="btn btn-sm btn-outline file-btn">
+                                        ⬆️ 上传
+                                        <input type="file" id="bannerUploadInput" accept="image/*" hidden>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-grid">
+                            <label class="field">
+                                <span>背景类型（旧字段）</span>
+                                <select class="select" id="setBgType">
+                                    <option value="color">color</option>
+                                    <option value="image">image</option>
+                                </select>
+                            </label>
+                            <label class="field">
+                                <span>背景值（旧字段）</span>
+                                <input type="text" id="setBgValue" placeholder="#ffe0f0">
+                            </label>
+                        </div>
+
+                        <div class="form-actions">
+                            <button class="btn btn-primary" type="button" id="btnSettingsSave">💾 保存设置</button>
+                            <span class="hint">保存后刷新前台页面即可看到效果（头像、横幅图、分享卡片）</span>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-head">
+                            <h3>原始 settings.json</h3>
+                            <button class="btn btn-sm btn-outline" type="button" id="btnSettingsReload">🔄 重新读取</button>
+                        </div>
+                        <pre class="code-block" id="settingsRaw">—</pre>
+                    </div>
+                </section>
+
+                <!-- ===== 接口自检 ===== -->
+                <section class="tab-panel" id="tab-health">
+                    <h2>🩺 接口与媒体自检</h2>
+                    <div class="card">
+                        <div class="card-head">
+                            <h3>一键检查</h3>
+                            <button class="btn btn-primary btn-sm" type="button" id="btnRunHealth">▶ 开始自检</button>
+                        </div>
+                        <p class="hint" id="healthSummary">点击「开始自检」会依次请求所有公开接口、需要登录的接口，并逐个校验音乐 / 相册 / 头像文件是否真的能访问。</p>
+                        <div class="table-wrap">
+                            <table class="data-table">
+                                <thead>
+                                    <tr><th>项目</th><th>方法</th><th>路径</th><th>状态</th><th>耗时</th><th>说明</th></tr>
+                                </thead>
+                                <tbody id="healthTableBody">
+                                    <tr><td colspan="6" class="empty-cell">尚未运行自检</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-head"><h3>媒体文件校验</h3></div>
+                        <div class="table-wrap">
+                            <table class="data-table">
+                                <thead>
+                                    <tr><th>类型</th><th>名称</th><th>地址</th><th>状态</th></tr>
+                                </thead>
+                                <tbody id="mediaTableBody">
+                                    <tr><td colspan="4" class="empty-cell">尚未运行自检</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- ========== 歌词编辑弹窗 ========== -->
+    <div class="modal" id="lyricsModal" hidden>
+        <div class="modal-card">
+            <div class="modal-head">
+                <h3 id="lyricsModalTitle">编辑歌词</h3>
+                <button class="modal-close" type="button" id="lyricsModalClose">×</button>
+            </div>
+            <p class="hint">
+                使用 LRC 格式，每行形如 <code>[00:12.34]歌词内容</code>；留空表示纯音乐。
+            </p>
+            <textarea class="modal-textarea" id="lyricsTextarea" rows="14" placeholder="[00:00.00]第一句歌词"></textarea>
+            <div class="modal-actions">
+                <button class="btn btn-primary" type="button" id="btnLyricsSave">💾 保存歌词</button>
+                <button class="btn btn-outline" type="button" id="btnLyricsCancel">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== 确认弹窗 ========== -->
+    <div class="modal" id="confirmModal" hidden>
+        <div class="modal-card modal-card-sm">
+            <div class="modal-head">
+                <h3 id="confirmTitle">确认操作</h3>
+                <button class="modal-close" type="button" id="confirmClose">×</button>
+            </div>
+            <p id="confirmMessage" class="confirm-message"></p>
+            <div class="modal-actions">
+                <button class="btn btn-danger" type="button" id="btnConfirmOk">确认</button>
+                <button class="btn btn-outline" type="button" id="btnConfirmCancel">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script src="js/admin.js"></script>
+</body>
+</html>

@@ -5,15 +5,26 @@
     if (!canvas) return;
 
     var ctx = canvas.getContext('2d');
-    var width, height;
+    var width, height, dpr;
     var petals = [];
-    var PETAL_COUNT = 45;
+    var burstPetals = [];
+    var burstTimer = null;
+    // 手机端减少花瓣数量，降低 CPU 占用
+    var PETAL_COUNT = window.innerWidth < 640 ? 18 : 45;
     var mouseX = -1000;
     var mouseY = -1000;
+    var reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var running = false;
+    var rafId = null;
 
     function resize() {
-        width = canvas.width = window.innerWidth;
-        height = canvas.height = window.innerHeight;
+        // 按设备像素比放大画布，高分屏（尤其手机）花瓣不再发虚
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+        width = window.innerWidth;
+        height = window.innerHeight;
+        canvas.width = Math.floor(width * dpr);
+        canvas.height = Math.floor(height * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
 
     function randomRange(min, max) {
@@ -21,7 +32,7 @@
     }
 
     function createPetal() {
-        return {
+        var petal = {
             x: Math.random() * width,
             y: randomRange(-height * 0.5, -10),
             size: randomRange(10, 22),
@@ -37,6 +48,9 @@
             lightness: randomRange(65, 85),
             phase: Math.random() * Math.PI * 2,
         };
+        // 颜色只在创建时算一次，避免每帧重复拼接 hsla 字符串
+        petal.color = 'hsla(' + petal.hue + ', ' + petal.saturation + '%, ' + petal.lightness + '%, ' + petal.opacity + ')';
+        return petal;
     }
 
     function initPetals() {
@@ -55,18 +69,7 @@
         ctx.globalAlpha = petal.opacity;
 
         var s = petal.size;
-        var color =
-            'hsla(' +
-            petal.hue +
-            ', ' +
-            petal.saturation +
-            '%, ' +
-            petal.lightness +
-            '%, ' +
-            petal.opacity +
-            ')';
-
-        ctx.fillStyle = color;
+        ctx.fillStyle = petal.color;
         ctx.beginPath();
 
         // 五瓣樱花形状
@@ -100,7 +103,7 @@
         ctx.restore();
     }
 
-    function updatePetal(petal) {
+    function updatePetal(petal, recycle) {
         petal.y += petal.speedY;
         petal.x += petal.speedX + Math.sin(petal.phase + performance.now() * 0.001 * petal.wobbleSpeed) * petal.wobble;
         petal.rotation += petal.rotationSpeed;
@@ -117,21 +120,36 @@
         }
 
         if (petal.y > height + 50) {
+            // 临时樱花雨不循环，落出屏幕后由调用方移除
+            if (recycle === false) return false;
             petal.y = randomRange(-60, -10);
             petal.x = Math.random() * width;
             petal.rotation = Math.random() * Math.PI * 2;
         }
         if (petal.x < -60) petal.x = width + 60;
         if (petal.x > width + 60) petal.x = -60;
+        return true;
     }
 
     function draw() {
+        if (!running) return;
         ctx.clearRect(0, 0, width, height);
+
         for (var i = 0; i < petals.length; i++) {
             updatePetal(petals[i]);
             drawPetal(petals[i]);
         }
-        requestAnimationFrame(draw);
+
+        // 临时樱花雨：落出屏幕即移除
+        for (var j = burstPetals.length - 1; j >= 0; j--) {
+            if (updatePetal(burstPetals[j], false) === false) {
+                burstPetals.splice(j, 1);
+                continue;
+            }
+            drawPetal(burstPetals[j]);
+        }
+
+        rafId = requestAnimationFrame(draw);
     }
 
     document.addEventListener('mousemove', function (e) {
@@ -155,8 +173,60 @@
         mouseY = -1000;
     });
 
-    window.addEventListener('resize', resize);
+    // 樱花雨：一次性补充大量高速花瓣，持续约 10 秒后清空，供彩蛋触发
+    function sakuraRain(count, duration) {
+        if (!ctx || reducedMotion) return;
+        count = count || 40;
+        duration = duration || 10000;
+        for (var i = 0; i < count; i++) {
+            var p = createPetal();
+            p.y = randomRange(-height * 0.3, -10);
+            p.speedY = randomRange(2.2, 5.2);
+            p.speedX = randomRange(-1.2, 1.2);
+            p.size = randomRange(13, 25);
+            burstPetals.push(p);
+        }
+        clearTimeout(burstTimer);
+        burstTimer = setTimeout(function () { burstPetals = []; }, duration);
+    }
+
+    function start() {
+        if (running || reducedMotion) return;
+        running = true;
+        canvas.style.display = 'block';
+        resize();
+        if (!petals.length) initPetals();
+        draw();
+    }
+
+    function stop() {
+        running = false;
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = null;
+        ctx.clearRect(0, 0, width, height);
+        canvas.style.display = 'none';
+    }
+
+    // 对外暴露给彩蛋脚本（点击 Ciallo）与 hero.js
+    var Blog = window.Blog = window.Blog || {};
+    Blog.sakura = { rain: sakuraRain, start: start, stop: stop };
+
+    window.addEventListener('resize', function () {
+        if (running) resize();
+    });
     resize();
     initPetals();
-    draw();
+
+    // 用户开启「减少动态效果」时，只绘制一帧静态樱花，不启动动画循环
+    if (reducedMotion) {
+        for (var i = 0; i < petals.length; i++) drawPetal(petals[i]);
+        return;
+    }
+
+    // 冬季主题下不启动樱花（由雪花接管）
+    try {
+        if (localStorage.getItem('blog_theme') === 'winter' || localStorage.getItem('blog_weather') === 'snow') return;
+    } catch (e) { /* ignore */ }
+
+    start();
 })();

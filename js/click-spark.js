@@ -1,14 +1,19 @@
 (function () {
     'use strict';
 
-    var colors = [
-        '#FF6B9D', '#FF9EC4', '#FFB7C5', '#FFC0CB', '#FFB6C1',
-        '#FF7BAC', '#FF91A4', '#FF8BA7', '#FFB3C6', '#FFC8DD',
-        '#E84A8D', '#FF69B4', '#FF1493', '#DB7093', '#FF7F50'
-    ];
+    // 尊重「减少动态效果」偏好
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
     var particles = [];
     var container;
+
+    function getThemeColors() {
+        var styles = getComputedStyle(document.body);
+        var variables = ['--pink-300', '--pink-400', '--pink-500', '--pink-600', '--pink-700'];
+        return variables.map(function (name) {
+            return styles.getPropertyValue(name).trim();
+        }).filter(Boolean);
+    }
 
     function createParticle(x, y) {
         var particle = document.createElement('div');
@@ -17,7 +22,8 @@
         var angle = Math.random() * Math.PI * 2;
         var velocity = 2 + Math.random() * 5;
         var size = 4 + Math.random() * 6;
-        var color = colors[Math.floor(Math.random() * colors.length)];
+        var colors = getThemeColors();
+        var color = colors[Math.floor(Math.random() * colors.length)] || 'var(--pink-500)';
         
         particle.style.left = (x - size / 2) + 'px';
         particle.style.top = (y - size / 2) + 'px';
@@ -81,6 +87,8 @@
         var x = e.clientX;
         var y = e.clientY;
         
+        if (particles.length > 120) return;  // 粒子数量上限，避免快速连点导致堆积卡顿
+
         var count = 8 + Math.floor(Math.random() * 6);
         for (var i = 0; i < count; i++) {
             var p = createParticle(x, y);

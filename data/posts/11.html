@@ -1,0 +1,359 @@
+<p style="color:var(--pink-700);font-size:1.6rem;margin-bottom:8px;"><strong>从零自建代理节点： 3X-UI 面板与 xray</strong></p>
+<span style="font-size:1rem;color:var(--pink-500);">面板不能裸奔，订阅不能明文，节点还得真的能用——换个带家庭或者机房ip的服务器或许真的能做大做强（算了，不敢😅）。</span>
+
+<p style="color:var(--text-muted);font-size:0.95rem;border-left:4px solid var(--pink-400);padding-left:14px;display:inline-block;">
+    这是一篇把“自建代理节点教程”和“踩坑记录”合在一起的实录：前半部分讲怎么搭，后半部分讲为什么明明每一项看起来都对，Clash 还是一脸冷漠地超时。</p>
+
+<hr style="border-color:rgba(255,180,200,0.3);margin:24px 0;">
+
+<h2 style="color:var(--pink-600);border-left:5px solid var(--pink-400);padding-left:14px;font-size:1.35rem;">0. 事情是怎么开始的</h2>
+
+<p>我已经订阅了一个机场，但手里还有一台新加坡的 VPS ，闲着也是闲着，于是就产生了一个非常典型的想法：</p>
+
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<p>“既然我都有 VPS 了，为什么不自己搭一个节点？”</p>
+</blockquote>
+
+<p>这句话听起来很合理，甚至有一点工程师的浪漫。然后我就从晚上 7 点半折腾到了 11 点，亲眼见证了面板、xray、证书、Cloudflare、防火墙轮流出来给我上课。</p>
+
+<p>我的要求其实不算过分：</p>
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<p>3X-UI 面板不能暴露到公网，毕竟管理后台只能对我开放；</p>
+<p>订阅链接要走 HTTPS，不能把配置明文晃在公网；</p>
+<p>自建节点要能和原来的机场订阅共存，想切换时就切换。</p>
+</blockquote>
+
+<p>最终架构大概是这样：</p>
+
+<pre><code class="language-plaintext">[我的电脑 Clash]
+        │
+        │ ① 订阅链接 https://域名/sub/xxx
+        │    （Cloudflare + nginx，HTTPS）
+        ▼
+[Cloudflare] ──→ [VPS nginx :443] ──→ [3X-UI 订阅服务 :2096]
+                                      （只监听 localhost）
+        │
+        │ ② 节点直连 VPS_IP:8443
+        │    （UDP，Hysteria2）
+        ▼
+                [VPS xray :8443]</code></pre>
+
+<p>这里有一个很重要的分工：<strong>订阅链接走域名，节点流量直连 IP</strong>。订阅适合走 Cloudflare 的 HTTPS 反代，但 Hysteria2 使用 QUIC/UDP，不能指望 Cloudflare 替你转发代理流量。</p>
+
+<h2 style="color:var(--pink-600);border-left:5px solid var(--pink-400);padding-left:14px;font-size:1.35rem;">一、代理节点到底在干什么</h2>
+
+<p>先用一句不太严谨但足够好懂的话解释：代理节点就是一台帮你转发网络请求的海外中间服务器。</p>
+
+<pre><code class="language-plaintext">你的设备 ──（加密 + 伪装连接）──&gt; 海外 VPS ──（正常访问）──&gt; 目标网站
+        &lt;───────────────────────────────────────────────────────</code></pre>
+
+<p>关键点有三个：</p>
+<ol>
+<li>你的设备和 VPS 之间是一条加密隧道，流量会被加密，并尽量伪装成正常的 HTTPS 或 QUIC 流量；</li>
+<li>VPS 和目标网站之间，是海外服务器自己的正常网络连接；</li>
+<li>所以本质上就是：借 VPS 的海外网络身份访问目标服务。</li>
+</ol>
+
+<p>这和之前用 frp 做内网穿透有点像，都是“找一台中间服务器转发”。区别是 frp 更像老实的搬运工，而代理协议还要负责加密和伪装，属于“搬运之前先换件衣服”。</p>
+
+<h2 style="color:var(--pink-600);border-left:5px solid var(--pink-400);padding-left:14px;font-size:1.35rem;">二、协议怎么选：先别急着全都装</h2>
+
+<table>
+<tr><th>协议</th><th>抗干扰能力</th><th>速度</th><th>延迟敏感场景</th><th>特点</th></tr>
+<tr><td><strong>Hysteria2</strong></td><td>强</td><td>快</td><td>✅ 优秀</td><td>基于 QUIC/UDP，抗丢包</td></tr>
+<tr><td><strong>VLESS + Reality</strong></td><td>很强</td><td>快</td><td>良好</td><td>伪装成访问真实网站</td></tr>
+<tr><td>Trojan</td><td>中</td><td>快</td><td>一般</td><td>老方案，需要证书</td></tr>
+<tr><td>Shadowsocks</td><td>中</td><td>快</td><td>一般</td><td>经典方案，特征相对明显</td></tr>
+</table>
+
+<p>我的选择是：</p>
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<p>想要延迟低一点、看视频或者折腾游戏：<strong>Hysteria2</strong>。<br>
+想要稳定一点、长期使用：<strong>VLESS + Reality</strong>。<br>
+两个也可以同时开在不同端口，Clash 里一起导入，哪个状态好就用哪个。</p>
+</blockquote>
+
+<p>本文主要记录 Hysteria2 的部署过程，因为它在高延迟、存在丢包的线路上体感通常更好。但“更好”不等于“瞬移”——如果服务器在新加坡，国内访问它的物理距离不会因为换了协议就消失。</p>
+
+<h2 style="color:var(--pink-600);border-left:5px solid var(--pink-400);padding-left:14px;font-size:1.35rem;">三、用 3X-UI 部署节点</h2>
+
+<p>如果手搓所有 xray 配置，我大概会在 YAML、JSON 和人生之间迷路。所以这次用了 3X-UI：安装面板，然后在网页里添加入站、生成订阅。</p>
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">3.1 安装面板</h3>
+
+<p>SSH 登录 VPS 后执行：</p>
+
+<pre><code class="language-bash">bash &lt;(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh)</code></pre>
+
+<p>安装完成后会显示面板地址、账号和密码。先把这些信息记好，不要安装结束后只顾着开心，然后回头问“刚才密码是什么来着”。</p>
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">3.2 开放需要开放的端口</h3>
+
+<p>在云厂商安全组里放行真正需要的端口，例如：</p>
+
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<p>面板端口（后面会尽量限制访问来源）；
+<p>订阅服务反代使用的 HTTPS 端口，例如 443；
+<p>Hysteria2 节点端口，例如 UDP 8443。
+</blockquote>
+
+<p>不要因为“反正是自己的 VPS”就把所有端口都打开。防火墙不是摆设，它是服务器门口那个虽然有点烦、但确实应该存在的保安。</p>
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">3.3 添加入站</h3>
+
+<p>进入 3X-UI 的<strong>入站列表 → 添加入站</strong>。</p>
+
+<p><strong>VLESS + Reality：</strong></p>
+<ul>
+<li>协议：<code>vless</code></li>
+<li>传输：<code>tcp</code>，开启 Reality</li>
+<li>SNI：填一个真实网站域名，例如 <code>www.microsoft.com</code></li>
+<li>公钥 / 私钥：让面板自动生成</li>
+<li>shortId：留空或随机生成</li>
+</ul>
+
+<p><strong>Hysteria2：</strong></p>
+<ul>
+<li>协议：<code>hysteria2</code></li>
+<li>端口：例如 <code>443</code> 或 <code>8443</code></li>
+<li>密码：设置一个自己保存好的密码</li>
+<li>TLS 证书：必须配置，后面会讲我怎么被它教育的</li>
+</ul>
+
+<p>保存之后，节点理论上就生效了。注意这里的“理论上”非常重要，因为接下来还有六个坑排队等着。</p>
+
+<h2 style="color:var(--pink-600);border-left:5px solid var(--pink-400);padding-left:14px;font-size:1.35rem;">四、订阅导入 Clash</h2>
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">方式 A：订阅导入（推荐）</h3>
+
+<p>在 3X-UI 面板里找到对应入站的订阅设置，生成 Clash 格式订阅链接，然后：</p>
+
+<ul>
+<li><strong>Clash Verge Rev / Clash Meta</strong>：订阅 → 新建 → 粘贴链接 → 导入 → 选择节点 → 打开系统代理；</li>
+<li><strong>Clash for Windows</strong>：Profiles → 粘贴链接 → Download。</li>
+</ul>
+
+<p>如果订阅链接经过了 nginx 和 Cloudflare，确认它访问的是正确的订阅路径，而不是博客首页。博客首页很好看，但它显然不能当代理配置文件吃。</p>
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">方式 B：手动写配置</h3>
+
+<p>不想使用面板订阅，也可以直接在 Clash 配置的 <code>proxies:</code> 下面添加节点。</p>
+
+<p><strong>Hysteria2 示例：</strong></p>
+
+<pre><code class="language-yaml">proxies:
+  - name: "新加坡-hy2"
+    type: hysteria2
+    server: 你的VPS_IP
+    port: 443
+    password: 你的密码
+    sni: bing.com
+    skip-cert-verify: true</code></pre>
+
+<p><strong>VLESS Reality 示例：</strong></p>
+
+<pre><code class="language-yaml">proxies:
+  - name: "新加坡-reality"
+    type: vless
+    server: 你的VPS_IP
+    port: 443
+    uuid: 你的uuid
+    network: tcp
+    tls: true
+    flow: xtls-rprx-vision
+    servername: www.microsoft.com
+    reality-opts:
+      public-key: 你的公钥
+      short-id: 你的shortId
+    client-fingerprint: chrome</code></pre>
+
+<p>这里再次强调：如果节点使用自签证书，客户端配置里通常需要 <code>skip-cert-verify: true</code>。当然，生产环境更推荐使用正确配置的证书，而不是把“跳过验证”当成万能创可贴。</p>
+
+<h2 style="color:var(--pink-600);border-left:5px solid var(--pink-400);padding-left:14px;font-size:1.35rem;">五、六个坑：每一个都像在说“明明是你配置错了”</h2>
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">坑 1：面板和 xray 是同一个服务</h3>
+
+<p>我一开始以为：面板只是管理工具，停掉它之后，xray 应该还能继续工作。</p>
+
+<p>现实是：3X-UI 的 <code>x-ui.service</code> 同时负责 Web 面板和 xray 核心。面板停了，xray 也跟着停。它们不是“老板”和“员工”，更像是“一个进程里的两个工位”。</p>
+<p>所以：</p>
+<pre><code class="language-bash">systemctl status x-ui</code></pre>
+
+<p>如果显示 <code>inactive</code>，不要只觉得“面板没了而已”，你的节点大概率也已经一起下班了。</p>
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">坑 2：SSH 隧道把节点地址变成了 localhost</h3>
+
+<p>为了不把面板暴露到公网，我通过 SSH 隧道访问它：</p>
+
+<pre><code class="language-bash">ssh -L 0721:127.0.0.1:0721 root@你的VPS_IP</code></pre>
+
+<p>结果在隧道里生成订阅时，3X-UI 根据访问请求的 Host 自动推断节点地址，最后导出的节点变成了：</p>
+
+<pre><code class="language-plaintext">server: localhost</code></pre>
+
+<p>然后我的电脑 Clash 很认真地连接了自己的电脑，当然什么也没连接上。这个错误的可爱之处在于：配置文件看起来完整，节点也成功导入，但它压根没有去 VPS。</p>
+
+<p><strong>解决办法</strong>：在面板里显式配置节点的公网地址，填 VPS 的 IP，不要让它从 SSH 隧道的 Host 自动猜。</p>
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">坑 3：节点填域名，Cloudflare 负责把它送走</h3>
+
+<p>我又想当然地把节点地址填成了自己的域名。这个域名套在 Cloudflare 后面，开着橙云代理。</p>
+
+<p>问题是 Cloudflare 主要代理 HTTP / HTTPS / WebSocket 等流量，不能替你代理 Hysteria2 的 QUIC / UDP 节点流量。于是节点数据包走到 Cloudflare 门口，Cloudflare 看了一眼，大概说了句“这个我不认识”，然后超时。</p>
+
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<p><strong>正确分工：</strong><br>
+订阅链接：走域名，走 HTTPS，走 Cloudflare + nginx。<br>
+节点连接：直连 VPS 的 IP，不要让 Hysteria2 绕去 Cloudflare。</p>
+</blockquote>
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">坑 4：Hysteria2 没证书，xray 直接崩溃</h3>
+
+<p>Hysteria2 底层使用 QUIC，而 QUIC 需要 TLS。没配证书时，xray 日志给出了这样的报错：</p>
+
+<pre><code class="language-plaintext">failed to build inbound config with tag in-8443-udp
+&gt; failed to parse certificate
+&gt; both file and bytes are empty.</code></pre>
+
+<p>翻译一下就是：你让我开门，但你连门锁都没装。</p>
+
+<p>更麻烦的是，这不是只影响 Hysteria2 这一条入站。xray 核心因为配置解析失败直接崩溃，其他节点也一起没了。最后我用 openssl 生成了自签证书：</p>
+
+<pre><code class="language-bash">openssl req -x509 -newkey rsa:2048 -keyout /etc/x-ui/certs/hy2.key \
+  -out /etc/x-ui/certs/hy2.crt -days 3650 -nodes -subj "/CN=hy2"</code></pre>
+
+<p>证书填进面板后，xray 才终于愿意重新上班。</p>
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">坑 5：自签证书被 Clash 拒绝</h3>
+
+<p>证书有了，xray 也起来了，端口也放行了，但 Clash 还是超时。</p>
+
+<p>最后发现，自签证书不在系统信任的 CA 列表里，Mihomo 内核默认会校验证书，于是把它拒之门外。</p>
+
+<p>自签证书节点需要在客户端配置里加入：</p>
+
+<pre><code class="language-yaml">skip-cert-verify: true</code></pre>
+
+<p>加上之后，节点立刻通了。这个坑尤其隐蔽：服务端、端口、防火墙看起来全都正常，但客户端就是不愿意握手。遇到“所有东西都对但还是超时”，证书校验值得排在排查清单前面。</p>
+
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<p>小提醒：<code>skip-cert-verify</code> 适合自签证书的测试或明确场景，不应该成为“证书随便搞”的借口。长期使用还是应该配置正确的证书和域名。</p>
+</blockquote>
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">坑 6：订阅路径返回了博客首页</h3>
+
+<p>nginx 反代配置好之后，直连 VPS 测试订阅是通的，但通过域名访问 <code>https://域名/sub/xxx</code>，Clash 拿到的却是我的博客首页。</p>
+
+<p>一开始我还以为是订阅内容突然开始追求文学性了。后来排查发现，Cloudflare 的 SSL 模式或缓存规则把请求处理歪了。</p>
+
+<p>需要检查：</p>
+<ol>
+<li>Cloudflare SSL/TLS 模式使用“完全（Full）”，不要使用容易导致反代异常的灵活模式；</li>
+<li>订阅路径配置绕过缓存，订阅内容不能被缓存成旧版本；</li>
+<li>nginx 的反代路径确实指向本机的 3X-UI 订阅服务端口，例如 <code>0721</code>；</li>
+<li>域名、路径和面板生成的订阅地址保持一致。</li>
+</ol>
+
+<h2 style="color:var(--pink-600);border-left:5px solid var(--pink-400);padding-left:14px;font-size:1.35rem;">六、面板怎么藏：三板斧</h2>
+
+<p>这次折腾下来，我觉得面板加固至少要做三件事：</p>
+
+<ol>
+<li><strong>非标准端口</strong>：不要把管理入口直接放在最显眼的位置；</li>
+<li><strong>秘密路径</strong>：修改 Web base path，让默认扫描少一点收获；</li>
+<li><strong>强密码 + 防火墙</strong>：面板端口尽量只允许自己的来源访问，或者直接封死公网入口。</li>
+</ol>
+
+<p>如果想彻底不暴露面板，可以把面板端口防火墙封死，只通过 SSH 隧道访问：</p>
+
+<pre><code class="language-bash">ssh -L 0721:127.0.0.1:0721 root@你的VPS_IP</code></pre>
+
+<p>这样管理面板只能从 SSH 进去，公网扫描器看到的就不是一个敞开的登录框，而是一扇根本不存在的门。</p>
+
+<h2 style="color:var(--pink-600);border-left:5px solid var(--pink-400);padding-left:14px;font-size:1.35rem;">七、延迟高的真相：协议不是魔法</h2>
+
+<p>节点终于能用了，但速度和延迟又开始提醒我：服务器在新加坡这件事，并没有因为配置成功而改变。</p>
+
+<p>影响延迟的因素，按重要程度大致是：</p>
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">1. 物理距离</h3>
+<p>新加坡到国内的基础 RTT 大约在 70～150ms，光速和路由绕行共同决定。这个是物理规律，不是把配置文件再改三遍就能消失的。</p>
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">2. 国际出口拥堵</h3>
+<p>晚高峰（尤其 20:00～23:00）国际线路拥堵，抖动、丢包和速度下降一起出现。白天“还行”，晚上“怎么又不行了”，通常不是 VPS 突然产生了情绪，而是线路真的在堵。</p>
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">3. 防火墙干扰</h3>
+<p>防火墙更常见的影响是丢包、限速和阻断特定协议，不会凭空把基础物理延迟变成两倍。但它会和晚高峰叠加，让卡顿更加明显。</p>
+
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<p><strong>所以结论是：</strong>延迟高主要是“距离 + 线路拥堵”，防火墙更多是推波助澜。不要指望换一个协议之后，位于新加坡的服务器突然搬到家门口。</p>
+</blockquote>
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">比较有效的优化顺序</h3>
+
+<ol>
+<li><strong>换近机房</strong>：香港通常最快但更贵，日本、台湾、韩国也可以考虑；</li>
+<li><strong>选优质线路</strong>：电信看 CN2 GIA，移动看 CMI，联通看 CUII / 9929；</li>
+<li><strong>换 Hysteria2</strong>：QUIC/UDP 在高延迟和丢包环境下体感可能明显好于 TCP；</li>
+<li><strong>使用中转 / 跳板</strong>：改善拥堵路由，但解决不了源服务器距离远的问题；</li>
+<li><strong>避开晚高峰</strong>：大流量操作尽量放到白天或深夜。</li>
+</ol>
+
+<p>一句话总结：<strong>换近机房和优质线路是治本，换 Hysteria2 是锦上添花，中转跳板主要治标。</strong></p>
+
+<h2 style="color:var(--pink-600);border-left:5px solid var(--pink-400);padding-left:14px;font-size:1.35rem;">八、我的排查顺序</h2>
+
+<p>以后再遇到节点超时，我决定不再凭感觉乱改配置，而是按照下面的顺序排查：</p>
+
+<ol>
+<li>先看 xray 有没有启动，Hysteria2 是 UDP，可以用 <code>ss -ulnp</code> 检查；</li>
+<li>再看 VPS 系统防火墙和云厂商安全组有没有放行对应端口；</li>
+<li>然后查证书，尤其是自签证书对应的 <code>skip-cert-verify</code>；</li>
+<li>确认节点地址是 VPS IP，而不是被 Cloudflare 代理的域名；</li>
+<li>最后再考虑 Cloudflare、线路和其他网络层问题。</li>
+</ol>
+
+<h2 style="color:var(--pink-600);border-left:5px solid var(--pink-400);padding-left:14px;font-size:1.35rem;">九、命令速查</h2>
+
+<pre><code class="language-bash"># 生成自签证书（Hysteria2 用）
+openssl req -x509 -newkey rsa:2048 -keyout /etc/x-ui/certs/hy2.key \
+  -out /etc/x-ui/certs/hy2.crt -days 3650 -nodes -subj "/CN=hy2"
+
+# 看 xray 有没有监听（Hysteria2 是 UDP）
+ss -ulnp | grep 8443
+
+# 重启面板 + xray（同一个服务）
+systemctl restart x-ui
+
+# SSH 隧道访问被封的面板
+ssh -L 0721:127.0.0.1:0721 root@你的VPS_IP
+
+# Clash 节点配置里，自签证书要加这一行
+skip-cert-verify: true</code></pre>
+
+<h2 style="color:var(--pink-600);border-left:5px solid var(--pink-400);padding-left:14px;font-size:1.35rem;">十、最后</h2>
+
+<p>从“面板暴露了怎么办”到“节点终于能上网”，中间踩了证书、Cloudflare、防火墙、端口和地址推断等一串坑。最深的感受是：代理节点这条链路上，每一环都能单独把你卡死，而且报错往往还不太会直接告诉你真正的问题。</p>
+
+<p>比如：</p>
+
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<p>节点连不上，可能是证书；<br>
+证书没问题，可能是 Cloudflare；<br>
+Cloudflare 没问题，可能是 localhost；<br>
+localhost 改好了，可能是 xray 根本没启动；<br>
+xray 启动了，可能是晚高峰线路堵了。</p>
+</blockquote>
+
+<p>所以这次最大的收获不是“我成功搭了一个节点”，而是终于知道该怎么拆解问题：先看服务，再看端口，再看证书，再看地址，最后再去怀疑线路。一步一步排查，比对着超时提示陷入哲学思考有效得多。</p>
+
+<p>当然，这类工具请只用于合法用途，例如跨境办公、访问学术资源和远程开发，并遵守当地法律法规。技术可以折腾，边界还是要记得看。</p>
+
+<p>总之，节点现在能用了，面板也没有裸奔，订阅和机场也能和平共处。至于延迟嘛——它还在新加坡，暂时没有搬家的打算。</p>
+
+<div style="border-radius:20px;padding:1.2rem 1.8rem;margin:2rem 0 1rem;text-align:center;font-size:0.95rem;border:1px solid rgba(255,180,200,0.25);">
+    <p>最后啊最后，就是因为这个B服务器是广播ip，导致基本上有风控的网站都去不了（也没有想到）😅，所以 x-ui 最后就关掉了，不过还是纪念一下(╹ڡ╹ )
+</div>
+
+<p style="text-align:right;">——鱼小鳄Sugary</p>
+<p style="text-align:right;">2026年9月10日深夜</p>

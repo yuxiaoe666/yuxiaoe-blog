@@ -1,0 +1,268 @@
+<p style="color:var(--pink-700);font-size:1.6rem;margin-bottom:8px;"><strong>老华硕重装 Linux 系统（Ubuntu Server —— 26.04）实录</strong></p>
+<span style="font-size:1rem;color:var(--pink-500);">从 BIOS 到桌面美化，两天踩坑记录</span>
+
+<p style="color:var(--text-muted);font-size:0.95rem;border-left:4px solid var(--pink-400);padding-left:14px;display:inline-block;">
+    一台约摸 2017 年的华硕老笔记本，本人历时两天，最终拥有了一台比较纯粹的 Linux 电脑。</p>
+<hr style="border-color:rgba(255,180,200,0.3);margin:24px 0;">
+
+<h2 style="color:var(--pink-600);border-left:5px solid var(--pink-400);padding-left:14px;font-size:1.35rem;">0. 写在前面</h2>
+<p>我家有一台约摸 2017 年的古董华硕老笔记本，配置不算高（但起码比我的云服务器配置好得多）——Intel 平台、NVMe SSD、MX110 独显 2GB（有显卡是我没想到的，虽然性能一般😅）。开始时是我爸办公用的，但后面不用了，反正闲置了好久，于是这久在研究电脑的我就打算要来玩一下
+    也算是废物利用嘛，开机之后映入眼帘的便是360全家桶和各种流氓软件，于是我就决定决定重装系统，彻底干掉 Windows，装上 Ubuntu，改造成一台家用服务器。（一开始我确实是这么想的，所以安装的是服务器版本😅）</p>
+<p>结果这折腾就是两天。从 BIOS 不让 U 盘启动，到 Ubuntu 26.04 改 SSH 端口被 systemd 无视，最后把桌面美化一手并发了 B 站，中间踩了无数坑。</p>
+<p>因此这篇文章把全过程写下来——既是自己的笔记，也希望帮到有同样需求，同样在路上的人😋。</p><br>
+
+<h2 style="color:var(--pink-600);border-left:5px solid var(--pink-400);padding-left:14px;font-size:1.35rem;">一、装系统：神经 BIOS</h2>
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">1.1 死锁局面</h3>
+<p>这老华硕的 SATA Mode 有两个选项，把我困了一整天：</p>
+
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<table style="width:100%;border-collapse:collapse;font-size:0.95rem;">
+<tr style="border-bottom:1px solid rgba(255,180,200,0.3);"><th style="padding:6px 10px;text-align:left;">模式</th><th style="padding:6px 10px;text-align:center;">U 盘能启动？</th><th style="padding:6px 10px;text-align:center;">NVMe 硬盘可见？</th></tr>
+<tr style="border-bottom:1px solid rgba(255,180,200,0.15);"><td style="padding:6px 10px;">Intel RST（出厂默认）</td><td style="padding:6px 10px;text-align:center;">✅</td><td style="padding:6px 10px;text-align:center;">❌ lsblk 只显示 U 盘</td></tr>
+<tr><td style="padding:6px 10px;">AHCI</td><td style="padding:6px 10px;text-align:center;">❌ BIOS 不识别</td><td style="padding:6px 10px;text-align:center;">✅ 内核正常识别</td></tr>
+</table>
+</blockquote>
+
+<p>什么意思呢？就是 RST 模式下能进 Ubuntu Live 环境，但安装程序找不到硬盘——lsblk 只显示 U 盘自己（因此如果安装的话就会把系统装在 U 盘里）。切 AHCI 后内核能认硬盘了，但 BIOS 直接不认 U 盘了，启动菜单里根本没有“从 U 盘启动”选项。</p>
+<p>两个模式各缺一半，没法同时满足"U 盘启动"和"看到硬盘"。这死锁困了我一整天（我问了一天的ai，也看了一些相关的文章）。</p><br>
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">1.2 无效尝试</h3>
+<p>先找网页版 DeepSeek 聊了一整天，网页版的 GPT 我也问过，但免费额度用完了😅（我一般要用的时候也就调GPT的api，不充会员，有点贵），试了很多种方案全部失败：</p>
+
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<p>🔹 改 Windows 注册表预埋 AHCI 驱动（iaStorV、storahci 的 Start 值 → 0）→ 做到了，没用<br>
+🔹 换 USB 2.0 口、开关 Legacy USB Support / XHCI Hand-off → 没用<br>
+🔹 RST 下 modprobe ahci 强载驱动 → 没用<br>
+🔹 dmraid 清 RAID 元数据 → 命令都不存在<br>
+🔹 wipefs 清文件系统签名 → 还是看不到硬盘<br>
+🔹 EasyBCD 从硬盘引导 ISO → UEFI 下功能受限<br>
+🔹 grub2win → 尝试失败</p>
+</blockquote>
+
+<p>网页 AI 的问题在于只能给静态建议。每个方案都是"你试试这个""再试试那个"，但难以做到根据实际报错动态调整。</p><br>
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">1.3 转机：诊断优先</h3>
+<p>后来直接上 openclaw ，第一件事不是猜方案，是跑诊断（这才是正道啊，而不是乱猜😭（不过实话说之前我确实没怎么了解过bios，先拓展一下知识也还不错））：</p>
+<p>
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<p>sudo dmesg | grep -i ahci
+</blockquote>
+
+<p>输出：</p>
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<p>ahci: Found 1 remapped NVMe devices.<br>
+<p>ahci: Switch your BIOS from RAID to AHCI mode to use them.
+</blockquote>
+
+<p>内核自己说了——切 AHCI。问题变成：怎么在 AHCI 下找到一个绕过 BIOS USB Bug 的引导方式？</p><br>
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">1.4 破局：Vrntoy</h3>
+
+<p><strong> Ventoy 替代 Rufus</strong></p>
+<p>Rufus 写出来的 EFI 结构有坑：BOOTx64.EFI 只是跳板，它回头找 grubx64.efi，在某些老固件上找不到就崩溃。Ventoy 的 EFI 结构更自包含，兼容性好得多。用 Ventoy2Disk，格式选 FAT32 + MBR。</p>
+
+<p><strong> 真正的 EFI Shell</strong></p>
+<p>从 GitHub 下载独立的 shell.efi（不是 GRUB shell），扔到 U 盘根目录。BIOS 里通过 Launch EFI Shell from filesystem device 直接启动。</p>
+
+<p><strong> 放弃 NVRAM 启动项</strong></p>
+<p>老固件在 AHCI 切换后 NVRAM 行为异常，创建的启动项重启就消失。那就不创建，每次手动 EFI Shell 引导。</p><br>
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">1.5 最终步骤</h3>
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<p>
+① Ventoy2Disk 烧制启动 U 盘（FAT32 + MBR）<br>
+② 把 Ubuntu Server ISO + shell.efi 拖入 U 盘根目录<br>
+③ 老电脑 → BIOS → SATA Mode → AHCI → F10 保存<br>
+④ BIOS → Launch EFI Shell from filesystem device<br>
+⑤ Shell> fs1:<br>
+⑥ Shell> EFI\BOOT\BOOTx64.EFI<br>
+⑦ Ventoy 菜单 → Ubuntu ISO → Boot in normal mode<br>
+⑧ 安装器里 NVMe 硬盘终于出现 → 全盘 ext4 → 勾 OpenSSH server（我打算直接用openclaw SSH 登录这个服务器并继续操作） → 完成 ✅
+</p>
+</blockquote>
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">1.6 小结</h3>
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<p>🔹 <strong>先诊断再动手</strong>：dmesg 比任何猜测都有用<br>
+🔹 <strong>Ventoy > Rufus</strong>：老固件兼容场景差距明显<br>
+🔹 <strong>EFI Shell 是万能兜底</strong>：能绕过 90% 的 UEFI 引导问题<br>
+🔹 <strong>最好还是之前或多或少了解过或者学过点理论知识再来弄这个，不然如果什么都不知道就太牢了😅</strong>
+</blockquote><br>
+
+<h2 style="color:var(--pink-600);border-left:5px solid var(--pink-400);padding-left:14px;font-size:1.35rem;">二、Ubuntu 26.04：暗坑合集</h2>
+<p>系统装好了，接下来的配置还有不少踩坑。<br>
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">2.1 SSH 改端口不生效</h3>
+<p>常规操作：
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<p>
+sudo nano /etc/ssh/sshd_config → 把 Port 22 改成 Port 9178（？！暗广？！）（反正不要用 22 据说安全性更高一点，可以防脚本小子说是🤔）<br>
+sudo systemctl restart sshd<br>
+ss -tlnp
+</p>
+</blockquote>
+<p>嗯？——<strong>还是 22 端口</strong>。为啥啊🤔？</p>
+
+<p>问了下ai找到原因：Ubuntu 26.04 的 SSH 使用 <strong>systemd socket</strong>激活（至少openclaw是这么说的🤔）。监听端口由 ssh.socket 这个 systemd 单元管理，不是 sshd_config 里的 Port 指令。你的 Port 配置直接被忽略了。</p>
+
+<p>正确做法：
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<p>
+sudo mkdir -p /etc/systemd/system/ssh.socket.d<br>
+sudo tee /etc/systemd/system/ssh.socket.d/override.conf << 'EOF'<br>
+[Socket]<br>
+ListenStream= # 空值清空默认<br>
+ListenStream=0.0.0.0:9178 # IPv4<br>
+ListenStream=[::]:9178 # IPv6<br>
+EOF<br>
+sudo systemctl daemon-reload<br>
+sudo systemctl restart ssh.socket sshd<br>
+</p>
+</blockquote>
+
+<p>三个关键点：</p>
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<p>1. ListenStream= 空值是清空，必须放在前面，否则新旧端口同时监听<br>
+2. IPv4 和 IPv6 都要写——只写 9178 默认只绑 IPv6<br>
+3. 必须重启 ssh.socket，只重启 sshd 不会重新读 socket 配置</p>
+</blockquote>
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">2.2 cloud-init 覆盖你的配置</h3>
+<p>Ubuntu 26.04 默认有 cloud-init 生成的文件：</p>
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<p>/etc/ssh/sshd_config.d/50-cloud-init.conf</p>
+</blockquote>
+<p>这个文件的优先级高于手改的 sshd_config。你费劲改了主配置，结果被 cloud-init 盖了。</p>
+<p>验证最终生效配置：sudo sshd -T | grep -E '(passwordauth|permitroot|pubkeyauth)'</p><br>
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">2.3 一个教训：留后路（我相信这个肯定不止我犯过😅）</h3>
+<p>我还犯了个很致命错误：让 openclaw 自己去一口气改完端口 + 关密码登录 + 禁 root 登录，然后——<strong>SSH 连不上了</strong>。因为没有留备用通道😅。</p>
+
+<p>正确的安全加固节奏：</p>
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<p>
+1. 同时开新旧端口 → ssh -p 9178 验证能连<br>
+2. 确认新端口通了再关旧端口<br>
+3. 确认密钥能连再关密码登录<br>
+4. 确认 sudo 用户能连再禁 root 登录<br>
+</p>
+</blockquote>
+<p>最后在这台机器上也安装了 openclaw ，后续遇到问题这类的也解决得比较快。<br>
+<p>还有就是，如果你要用 openclaw 帮你解决一些问题的话，一定要记得，不要让它自己去改有关于网络和 SSH 的配置。网络一断，它干到哪它自己都不知道，很难修。 ssh 也是类似的问题，本地连不上还好，可以本地操作一下还能有修的机会，就连云服务器都还有个网页控制台，要是真的是实体的远程服务器什么的连不上，那就很糟糕了。</p>
+<p style="font-size:1.1em;color:var(--pink-500);"><strong>反正就是——永远给自己留一条路。</strong></p>
+
+<br>
+<h2 style="color:var(--pink-600);border-left:5px solid var(--pink-400);padding-left:14px;font-size:1.35rem;">三、桌面美化：KDE Plasma 6 </h2>
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">3.1 为什么是 KDE</h3>
+<p>Ubuntu 默认 GNOME（Ubuntu 26.04 桌面版就是这个），但我选了Ubuntu Server 26.04 + KDE Plasma 6（这样好像有个词叫Kubuntu，但我之前没用过不知道，还是评论区的网友告诉我的😅），原因很简单——一开始我打算尝试纯命令来用这台电脑（请输入文本，那我还是太高估自己了😅），
+    后面我觉得还是有个桌面会更方便操作一些（菜就多练）😅，于是换了Xfce4（轻量化这一块），后面我又觉得还是好看一点的桌面更容易让我喜欢这玩意而且有这么好（相对云服务器来说）的配置，不搞好看一点可惜了，于是又删了Xfce4，换了KDE Plasma 6😅</p>
+<p>Plasma 6 在 26.04 上已经很稳定了，完全没有兼容问题。</p>
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<p>sudo apt install kde-plasma-desktop plasma-workspace sddm -y</p>
+</blockquote>
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">3.2 全局主题：自定义粉色（这个就自己摸索吧，我当时就是摸索着搞完了，但忘记录了，所以就让ai弄了个流程来的😅）</h3>
+<p> KDE 的主题分四层，需要分别设置：</p>
+
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<p>
+<strong>① 全局主题</strong>：系统设置 → 外观 → 全局主题 → 获取新主题 → 搜索自己喜欢的加上即可<br>
+<strong>② Kvantum 透明引擎</strong>：让所有 Qt 窗口支持半透明 + 模糊背景<br>
+sudo apt install qt6-style-kvantum kvantummanager -y<br>
+然后在 Kvantum Manager 里选自己喜欢的 → 应用<br>
+⚠️ 别忘了：系统设置 → 外观 → 应用程序风格 → 选 <strong>kvantum</strong>。不选的话不会生效。<br>
+<strong>③ Plasma 样式</strong>：系统设置 → 外观 → Plasma 样式 → 选自己喜欢的。管面板和弹出菜单。<br>
+<strong>④ 窗口装饰</strong>：系统设置 → 外观 → 窗口装饰 → 获取新窗口装饰 → 搜自己喜欢的。管标题栏。
+</p>
+</blockquote>
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">3.3 面板透明：Panel Colorizer</h3>
+<p>默认 KDE Plasma 面板是不透明黑条，太突兀了。从 KDE 商店安装 Panel Colorizer（要求 Plasma ≥ 6.0）。</p>
+<p>⚠️ 注意：Panel Colorizer 的设置入口不在系统设置里——需要：</p>
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<p>1. 右键面板 → 进入编辑模式<br>
+2. 再右键面板 → Panel Colorizer 选项<br>
+3. 透明度拉到 60%，背景模糊打开</p>
+</blockquote>
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">3.4 终端透明：Konsole</h3>
+<p>Konsole 是 KDE 自带终端，支持背景透明：</p>
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<p>
+Konsole → 设置 → 管理配置文件 → 新建<br>
+外观 → 编辑 → 透明度拉到 60%，勾上"模糊背景"<br>
+
+</p>
+</blockquote>
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">3.5 图标和字体</h3>
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<p>
+sudo apt install papirus-icon-theme -y# 覆盖最广的图标主题<br>
+sudo apt install fonts-jetbrains-mono -y# 连字好看的编程字体
+</p>
+</blockquote>
+
+
+<h3 style="color:var(--pink-600);font-size:1.1rem;">3.6 中文输入法：fcitx5</h3>
+<p>Ubuntu 自带 iBus，但 KDE 下 fcitx5 体验更好：</p>
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<p>sudo apt install fcitx5 fcitx5-pinyin fcitx5-config-qt -y</p>
+</blockquote>
+<p><strong>⚠️ 关键坑</strong>：配环境变量。不配的话 Chrome、VS Code 等非 KDE 原生应用中输入法不工作。</p>
+<p>编辑 ~/.profile 或 ~/.bashrc：</p>
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<p>
+export GTK_IM_MODULE=fcitx5<br>
+export QT_IM_MODULE=fcitx5<br>
+export XMODIFIERS=@im=fcitx5
+</p>
+</blockquote>
+<p>然后系统设置 → 输入法 → 添加"拼音"，默认 Ctrl+Space 切换。配完环境变量需要重新登录才生效。</p>
+<h2 style="color:var(--pink-600);border-left:5px solid var(--pink-400);padding-left:14px;font-size:1.35rem;">四、最终技术栈</h2>
+
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<p>
+<strong>老华硕笔记本</strong><br>
+├─ 系统：<strong>Ubuntu 26.04 LTS</strong>，UEFI，全盘 ext4<br>
+├─ 桌面：<strong>KDE Plasma 6.6</strong><br>
+│&emsp;├─ Kvantum 透明引擎 + Panel Colorizer 半透明面板<br>
+│&emsp;├─ Konsole 半透明终端<br>
+│&emsp;├─ Papirus 图标 + JetBrains Mono 字体<br>
+│&emsp;└─ fcitx5 拼音输入法<br>
+├─ 安全：SSH 端口 2222，密钥认证，UFW<br>
+├─ GPU：MX110 2GB，nvidia-driver-580<br>
+└─ AI：OpenClaw + DeepSeek API + Ollama local embedding
+</p>
+</blockquote>
+
+<hr style="border-color:rgba(255,180,200,0.3);margin:24px 0;">
+<p>
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<p>参考文献：<a href="https://www.bilibili.com/video/BV1hwK36AEgt/?share_source=copy_web&vd_source=ad331765252ae93f43b415b59f5f4453" target="_blank">神秘小链接</a><br>
+【一个本人觉得很好看的linux桌面】
+</blockquote>
+<p style="text-align:center;">————感兴趣的话别忘记给up三连窝（）😋————
+<div class="media-card">
+  <div class="media-card-title">🎬 我的linux桌面</div>
+  <img src="/uploads/gallery/desktop_image.webp"></img>
+</div>
+
+<hr style="border-color:rgba(255,180,200,0.3);margin:24px 0;">
+<h2 style="color:var(--pink-600);border-left:5px solid var(--pink-400);padding-left:14px;font-size:1.35rem;">五、几条核心经验</h2>
+
+<blockquote style="border-left:3px solid var(--pink-300);padding-left:16px;color:#8c6b78;margin:16px 0;">
+<p>
+1. <strong>老 BIOS 别硬刚</strong>，EFI Shell 是万能兜底<br>
+2. <strong>Ubuntu 26.04 的 SSH 端口在 ssh.socket 管</strong>，不在 sshd_config<br>
+3. <strong>改网络/SSH 配置永远先留后路</strong>，验证通了再切<br>
+4. <strong>npm 全局包不用 sudo</strong>，配用户级 prefix<br>
+5. <strong>KDE > GNOME</strong>（定制自由度），Kvantum 一步到位<br>
+</p>
+</blockquote>
+<p style="text-align:center;color:var(--text-muted);">——END——</p>
+<p style="text-align:right;">——鱼小鳄sugary</p>
+<p style="text-align:right;">——2026年7月16日</p>
+

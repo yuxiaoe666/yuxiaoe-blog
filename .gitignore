@@ -9,6 +9,21 @@ server/node_modules/
 # 上传的文件（用户数据，不应进入版本控制）
 server/uploads/
 
+# 运行时生成的数据索引（记录评论/访客/上传文件的索引，克隆后由服务自动重建）
+data/comments.json
+data/contacts.json
+data/gallery.json
+data/music.json
+data/settings.json
+data/visitors.json
+
+# 未写完的草稿（仅本地保留，不进仓库）
+data/posts/暂未写好/
+
+# 私人笔记与服务器配置参考（含真实域名 / 证书路径）
+参考文件/
+分析博客模板特色与架构.md
+
 # 操作系统
 .DS_Store
 Thumbs.db

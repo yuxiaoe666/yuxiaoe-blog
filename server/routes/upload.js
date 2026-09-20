@@ -11,10 +11,24 @@ const router = express.Router();
 const uploadsDir = path.join(__dirname, '..', 'uploads');
 const galleryDir = path.join(uploadsDir, 'gallery');
 const settingsDir = path.join(uploadsDir, 'settings');
+const postsDir = path.join(uploadsDir, 'posts');
 
-[galleryDir, settingsDir].forEach(dir => {
+[galleryDir, settingsDir, postsDir].forEach(dir => {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
+
+// 上传目标：gallery（图库，默认）/ settings（站点素材）/ posts（文章正文配图，不进图库）
+const UPLOAD_TARGETS = {
+    gallery: { dir: galleryDir, urlPrefix: '/uploads/gallery/' },
+    settings: { dir: settingsDir, urlPrefix: '/uploads/settings/' },
+    posts: { dir: postsDir, urlPrefix: '/uploads/posts/' },
+};
+
+// multipart 的字段顺序决定 req.body 的可见性，前端务必把 type 放在 file 之前
+function resolveTarget(req) {
+    const raw = (req.body && req.body.type) || 'gallery';
+    return UPLOAD_TARGETS[raw] || UPLOAD_TARGETS.gallery;
+}
 
 // 路径穿越检查
 function isPathSafe(baseDir, targetPath) {
@@ -30,9 +44,7 @@ function isSafeFilename(name) {
 
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        const type = (req.body && req.body.type === 'settings') ? 'settings' : 'gallery';
-        const dir = type === 'settings' ? settingsDir : galleryDir;
-        cb(null, dir);
+        cb(null, resolveTarget(req).dir);
     },
     filename: (req, file, cb) => {
         const ext = path.extname(file.originalname).toLowerCase();
@@ -57,13 +69,14 @@ const upload = multer({
 // 管理员：上传文件
 router.post('/', authMiddleware, upload.single('file'), (req, res) => {
     if (!req.file) return res.status(400).json({ error: '请选择文件' });
-    const type = req.body.type || 'gallery';
+    const target = resolveTarget(req);
+    const type = Object.keys(UPLOAD_TARGETS).find(key => UPLOAD_TARGETS[key] === target) || 'gallery';
     const isVideo = req.file.mimetype.startsWith('video/');
     if (type === 'gallery') {
         db.addGalleryItem({ filename: req.file.filename, original_name: req.file.originalname, type: isVideo ? 'video' : 'image' });
     }
-    const url = '/uploads/' + (type === 'settings' ? 'settings' : 'gallery') + '/' + req.file.filename;
-    res.json({ url, filename: req.file.filename, originalName: req.file.originalname, type: isVideo ? 'video' : 'image' });
+    const url = target.urlPrefix + req.file.filename;
+    res.json({ url, filename: req.file.filename, originalName: req.file.originalname, type: isVideo ? 'video' : 'image', target: type });
 });
 
 // 公开：获取图库列表

@@ -2,17 +2,26 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 
+const { JWT_SECRET } = require('../middleware/auth');
+
 const router = express.Router();
 
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
-const ADMIN_PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH || '$2a$10$stdepfQkEEf.O5scoC46je38/iDSC6AkloX1HWY6FyH57qFtshuHy';
-const JWT_SECRET = process.env.JWT_SECRET || 'blog_jwt_secret_2026';
+// 不提供默认密码哈希：仓库里写死的哈希等于公开的后门
+const ADMIN_PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH || '';
+
+if (!ADMIN_PASSWORD_HASH) {
+    console.warn('[警告] 未配置 ADMIN_PASSWORD_HASH，管理接口将无法登录，请在 server/.env 中设置。');
+}
 
 router.post('/login', async (req, res) => {
     try {
         const { username, password } = req.body;
         if (!username || !password) {
             return res.status(400).json({ error: '请输入用户名和密码' });
+        }
+        if (!ADMIN_PASSWORD_HASH) {
+            return res.status(503).json({ error: '服务器未配置管理员密码（ADMIN_PASSWORD_HASH），请在 server/.env 中设置' });
         }
         if (username !== ADMIN_USERNAME) {
             return res.status(401).json({ error: '用户名或密码错误' });

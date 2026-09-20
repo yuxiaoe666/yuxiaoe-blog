@@ -1,12 +1,43 @@
-<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>鱼小鳄の个人博客</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌸</text></svg>" type="image/svg+xml">
+    <meta name="description" content="鱼小鳄sugary的个人博客，记录日常、学习、AI与化学的交叉探索">
+    <meta name="keywords" content="博客,个人博客,AI,化学,学习,日常">
+    <meta name="author" content="鱼小鳄sugary">
+    <link rel="alternate" type="application/rss+xml" title="鱼小鳄のBLOG" href="/rss.xml">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+
+    <!-- 首屏前预应用主题，避免加载闪粉 -->
+    <script>
+    (function () {
+        try {
+            var legacy = localStorage.getItem('blog_theme') || 'auto';
+            var weather = localStorage.getItem('blog_weather') || (legacy === 'winter' ? 'snow' : 'sakura');
+            var period = localStorage.getItem('blog_period') || (legacy === 'morning' || legacy === 'afternoon' || legacy === 'night' ? legacy : 'auto');
+            var h = new Date().getHours();
+            var effectivePeriod = period === 'auto' ? (h < 6 || h >= 18 ? 'night' : (h < 12 ? 'morning' : 'afternoon')) : period;
+            var isDark = effectivePeriod === 'night';
+            if (weather === 'snow') {
+                document.body.classList.add('snow-mode', 'winter-mode');
+            }
+            var emoji = weather === 'snow' ? '\u2744\ufe0f' : '\ud83c\udf38';
+            var icon = document.querySelector('link[rel="icon"]');
+            if (icon) icon.href = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>" + emoji + "</text></svg>";
+            if (isDark) {
+                document.body.classList.add('dark-mode');
+            }
+            if (weather === 'snow') {
+                var logo = document.getElementById('loaderLogo');
+                if (logo) logo.textContent = '❄️';
+            }
+        } catch (e) { /* ignore */ }
+    })();
+    </script>
 
     <!-- 开场加载动画 -->
     <div class="loader-screen" id="loaderScreen">
@@ -39,15 +70,35 @@
                     <span class="hero-nav-name">鱼小鳄sugary</span>
                 </div>
                 <div class="hero-nav-period" id="heroPeriodToggle">
-                    <button class="period-btn active" data-period="auto" title="跟随时间">🕐</button>
-                    <button class="period-btn" data-period="morning" title="早晨">☀️</button>
-                    <button class="period-btn" data-period="afternoon" title="下午">🌤️</button>
-                    <button class="period-btn" data-period="night" title="夜晚">🌙</button>
+                    <div class="period-row">
+                        <button class="period-btn active" data-period="auto" title="自动：按时间决定天气与明暗">🕐</button>
+                        <button class="period-btn" data-period="snow" title="雪花主题">❄️</button>
+                        <button class="period-btn" data-period="sakura" title="樱花主题">🌸</button>
+                    </div>
+                    <div class="period-row">
+                        <button class="period-btn" data-period="morning" title="早晨">☀️</button>
+                        <button class="period-btn" data-period="afternoon" title="下午">🌤️</button>
+                        <button class="period-btn" data-period="night" title="夜晚">🌙</button>
+                    </div>
                 </div>
             </div>
             <div class="hero-content">
-                <h1 class="hero-title-text">🌸 鱼小鳄のBLOG</h1>
-                <p class="hero-subtitle-text">记录我那些不太起眼的日常</p>
+                <h1 class="hero-title-text">鱼小鳄のBLOG</h1>
+                <div class="hero-mood-wrap">
+                    <button class="hero-subtitle-text" id="heroMoodButton" type="button" title="点击换一句心情">记录我那些不太起眼的日常</button>
+                </div>
+                <div class="hero-life-cards">
+                    <div class="hero-life-card">
+                        <strong id="heroSiteDays">0</strong>
+                        <span>陪伴天数</span>
+                        <small>小站正在慢慢长大</small>
+                    </div>
+                    <div class="hero-life-card">
+                        <strong id="heroSiteVisitors">0</strong>
+                        <span>访客足迹</span>
+                        <small>每一次来访都被记住</small>
+                    </div>
+                </div>
                 <div class="hero-scroll-hint" id="heroScrollHint">
                     <span>"Deepseek me"</span>
                     <span class="scroll-arrow">↓</span>
@@ -59,30 +110,22 @@
     <!-- ========== 可滚动页面内容 ========== -->
     <div class="page-content" id="pageContent">
 
-    <!-- 顶部横幅 -->
-    <!-- <div class="banner" id="banner">
-        <div class="banner-img" id="bannerImg"></div>
-        <div class="banner-overlay">
-            <h1 class="banner-title">🌸 鱼小鳄のBLOG</h1>
-            <p class="banner-subtitle">记录我那些不太起眼的日常</p>
-        </div>
-    </div> -->
-
-    <!-- 动态线条分隔区 -->
-    <!-- <div class="divider-zone">
-        <canvas id="dividerCanvas"></canvas>
-    </div> -->
-
     <!-- 樱花层 -->
     <canvas id="sakuraCanvas"></canvas>
+
+    <!-- 雪花层（冬季主题） -->
+    <canvas id="snowCanvas"></canvas>
 
     <!-- Toast 提示 -->
     <div class="toast" id="toast"></div>
 
     <!-- 灯箱预览 -->
-    <div class="lightbox" id="lightbox">
-        <span class="lightbox-close" id="lightboxClose">&times;</span>
+    <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="照片预览">
+        <span class="lightbox-close" id="lightboxClose" title="关闭 (Esc)">&times;</span>
+        <button class="lightbox-nav lightbox-prev" id="lightboxPrev" type="button" title="上一张 (←)" aria-label="上一张">‹</button>
+        <button class="lightbox-nav lightbox-next" id="lightboxNext" type="button" title="下一张 (→)" aria-label="下一张">›</button>
         <div id="lightboxMedia"></div>
+        <span class="lightbox-counter" id="lightboxCounter"></span>
     </div>
 
     <!-- 主体布局：横幅下方 = 侧边栏 + 内容 -->
@@ -93,7 +136,7 @@
                     <div class="avatar-placeholder">🌸</div>
                 </div>
                 <h3>鱼小鳄sugary</h3>
-                <p>📧 联系我请访问联系页面</p>
+                <p>B站：<a href="https://space.bilibili.com/580795858" target="_blank">鱼小鳄鸭</a></p>
                 <p>个性签名：不敬月亮敬自己！</p>
             </div>
 
@@ -117,12 +160,21 @@
                     <span class="nav-icon">🌸</span> <span>关于</span>
                 </div>
                 <div class="nav-item" data-page="contact">
-                    <span class="nav-icon">✉️</span> <span>联系</span>
+                    <span class="nav-icon">💌</span> <span>留言板</span>
+                </div>
+                <div class="nav-item" data-page="friends">
+                    <span class="nav-icon">🔗</span> <span>友链</span>
                 </div>
             </nav>
 
             <div class="sidebar-footer">
+                <span class="sidebar-quote" id="sidebarQuote"></span>
+                <div class="life-details">
+                    <span id="siteDays">🌱 已陪伴 0 天</span>
+                    <span id="siteVisitors">第 0 位访客</span>
+                </div>
                 <span class="sidebar-copy">© 2026 鱼小鳄sugary</span>
+                <a class="sidebar-admin-link" href="/admin.html" title="站点管理面板">⚙️</a>
             </div>
         </aside>
 
@@ -138,7 +190,7 @@
                         <button class="btn btn-outline" data-goto="gallery">🖼️ 浏览相册</button>
                         <button class="btn btn-outline" data-goto="music">🎵 听听歌</button>
                         <button class="btn btn-outline" data-goto="about">🌸 关于我</button>
-                        <button class="btn btn-outline" data-goto="contact">✉️ 联系我</button>
+                        <button class="btn btn-outline" data-goto="contact">💌 留言板</button>
                     </div>
                 </div>
                 <div class="stats-row">
@@ -165,7 +217,7 @@
             <div class="content-panel" id="panel-posts">
                 <div class="post-search" style="margin-bottom:10px;">
                     <input type="text" id="postSearchInput" class="search-input" placeholder="🔍 搜索文章标题或标签..." autocomplete="off">
-                    <span id="postSearchCount" style="display:none;font-size:12px;color:#b89aa6;margin-left:12px;white-space:nowrap;"></span>
+                    <span id="postSearchCount" style="display:none;font-size:12px;color:var(--text-muted);margin-left:12px;white-space:nowrap;"></span>
                 </div>
                 <div class="post-filter-bar" id="postFilterBar" style="display:none;">
                     <div class="filter-section">
@@ -180,8 +232,16 @@
                 </div>
                 <div class="blog-list" id="blogList"></div>
                 <div class="pagination-container" id="postPagination" style="display:none;justify-content:center;gap:8px;margin:24px 0;"></div>
-                <div id="blogEmpty" class="card" style="text-align:center;color:#b89aa6;display:none;">
+                <div id="blogEmpty" class="card" style="text-align:center;color:var(--text-muted);display:none;">
                     <p>📝 还没有文章，快来写一篇吧！</p>
+                </div>
+            </div>
+
+            <!-- 归档 -->
+            <div class="content-panel" id="panel-archives">
+                <div class="card">
+                    <h2>📅 归档</h2>
+                    <div id="archivesTimeline"></div>
                 </div>
             </div>
 
@@ -190,7 +250,7 @@
                 <div class="card">
                     <h2>🖼️ 相册</h2>
                     <div class="gallery-grid" id="galleryGrid">
-                        <div style="color:#b89aa6;padding:20px;">暂无内容</div>
+                        <div style="color:var(--text-muted);padding:20px;">暂无内容</div>
                     </div>
                 </div>
             </div>
@@ -220,18 +280,18 @@
                             <button class="music-btn" id="musicMode" title="列表循环">🔁</button>
                             <div class="music-volume-wrap">
                                 <span class="music-volume-icon">🔊</span>
-                                <input type="range" class="music-volume" id="musicVolume" min="0" max="100" value="30">
+                                <input type="range" class="music-volume" id="musicVolume" min="0" max="100" value="20">
                             </div>
                         </div>
                     </div>
                     <div class="music-lyrics" id="musicLyrics">
-                        <p style="color:#b89aa6;text-align:center;padding:20px 0;">暂无歌词</p>
+                        <p style="color:var(--text-muted);text-align:center;padding:20px 0;">暂无歌词</p>
                     </div>
                 </div>
                 <div class="card">
                     <h3>📋 播放列表</h3><br>
                     <div class="music-list" id="musicList">
-                        <div style="color:#b89aa6;padding:12px;text-align:center;">🎵 还没有音乐，等待上传</div>
+                        <div style="color:var(--text-muted);padding:12px;text-align:center;">🎵 还没有音乐，等待上传</div>
                     </div>
                 </div>
                 <audio id="audioPlayer" preload="auto" style="display:none;"></audio>
@@ -242,13 +302,22 @@
                 <div class="card">
                     <h2>🌸 关于我</h2>
                     <p>你好呀！欢迎来到我的个人博客。<br>
+                    我是一个化学专业的入，也许你会奇怪，为什么我一个学化学的会想得起学计算机、研究AI和写博客？<br><br>
+                    我在大一的时候，我加过各种学生组织，也做了不少学生工作，但都只是一些重复性的工作，就是做做推文、海报啥的，我很快就厌倦了，我认为我在那里学不到任何新的东西，这个化院也是经常叫我们做一些草包工作，比如ppt、各种小组展示什么乱七八糟的东西。<br>
+                    然后我就开始接触AI，因为AI可以帮我解决很多重复性的工作，使我效率大大提高，我开始思考是否可以利用AI来帮助我学习甚至科研，于是我就开始了解各种AI......好吧。其实最开始的尝试是我想自己做galgame😅，但我不怎么会画画，于是便用了stable diffusion来生成立绘之类的（主页就是我弄的个人OC（这个我真喜欢😋））。
+                    配音我也解决不了，于是用了GPT-SoVITS来训练和合成语音......反正就这样一步一步地往前走......（至于你问我galgame怎么办，我只能说慢慢来嘛，万一真的有一天我能把自己的一些经历写成galgame呢😅）<br><br>
+                    后来，我就对AI和计算机科学与技术越来越感兴趣，也一直在学习和探索，不过话虽如此，我还是会坚持化学专业的学习，我相信，计算机和化学本来就是可以紧密联系的，而我也可以是那个为交叉学科贡献力量的人。<br>
+                    于是即便我可以当学生会什么什么部的部长/主席，必须要上什么什么无聊的水课/没什么太大用的课，我也还是把我宝贵的时间放在这些更有意义的事情上，我觉得这才是大学本该有的摸样，这才是青春的风采。<br><br>
+                    最后，我不是一个专业的程序员，我的计算机能力也不是很强，不过我会继续学习，至少，让自己满意。<br>
+                    希望在这里，你能找到共鸣。
                 </div>
 
                 <div class="card">
                     <h2>💡 关于本站</h2>
                     <p>
                         这是一个大一化学专业的入用 agent 搓的个人博客⚗️。<br>
-                        粉色为主调，樱花飘落，单纯因为我喜欢😋（武汉特色说是）。<br>
+                        这里也是我的一方小天地，记录着我的日常生活、学习历程、兴趣爱好、以及偶尔冒出的一些奇思妙想。<br>
+                        开始的时候是粉色为主调，樱花飘落，单纯因为我喜欢😋（武汉特色说是），后面我寻思快到冬天了，得有个更新嘛，于是就又做了个冬季主题😋。<br>
                         访客可以阅读文章、浏览相册、发表评论，感谢大家多多支持💕。<br><br>
                         🕊️ 希望我的小破站可以为你带来一些温暖、启发和帮助。
                     </p>
@@ -271,26 +340,96 @@
                 </div>
             </div>
 
-            <!-- 联系 -->
+            <!-- 留言板 -->
             <div class="content-panel" id="panel-contact">
-                <div class="card">
-                    <h2>✉️ 联系我</h2>
-                    <div class="contact-row">
-                        <div class="contact-info">
-                            <div class="info-item">
-                                <span class="info-icon">📍</span>
-                                <span>中国</span>
+                <div class="card contact-card-full">
+                    <div class="section-header">
+                        <div>
+                            <h2>留言板</h2>
+                        </div>
+                    </div>
+
+                    <div class="message-board-panel">
+                        <div class="message-board-meta">
+                            <div class="contact-summary-card">
+                                <span class="summary-label">总留言</span>
+                                <strong id="contactCount">0</strong>
                             </div>
-                            <div class="info-item">
-                                <span class="info-icon">📧</span>
-                                <span>通过留言表单联系我</span>
+                            <div class="contact-summary-card">
+                                <span class="summary-label">最近</span>
+                                <strong id="contactLatest">暂无</strong>
                             </div>
                         </div>
-                        <div class="contact-form">
-                            <input type="text" id="contactName" placeholder="你的名字">
-                            <input type="email" id="contactEmail" placeholder="你的邮箱（选填）">
-                            <textarea id="contactMsg" placeholder="想对我说的话..."></textarea>
-                            <button class="btn btn-primary" id="sendMsgBtn">💌 发送留言</button>
+
+                        <div class="message-board-list" id="messageBoardList"></div>
+
+                        <form class="guestbook-form" id="messageBoardForm">
+                            <div class="field-group">
+                                <label for="messageBoardName">昵称</label>
+                                <input id="messageBoardName" type="text" maxlength="30" placeholder="昵称 / 代号" required>
+                            </div>
+                            <div class="field-group">
+                                <label for="messageBoardText">留言</label>
+                                <textarea id="messageBoardText" maxlength="2000" placeholder="给站长留一句话吧～" required></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary">留下脚印</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 友链 -->
+            <div class="content-panel" id="panel-friends">
+                <div class="card">
+                    <div class="section-header">
+                        <div>
+                            <h2>朋友的小站</h2>
+                        </div>
+                    </div>
+                    <p class="friends-intro">这里放着我常去的小站、正在更新的角落，以及未来可能遇见的朋友。</p>
+                    <div class="friend-link-list friend-link-grid">
+                        <a class="friend-link-item" href="https://space.bilibili.com/580795858" target="_blank" rel="noopener">
+                            <span class="friend-link-icon">
+                                <img src="/uploads/gallery/bilibili_logo.webp" alt="Bilibili" loading="lazy" decoding="async" onerror="this.style.display='none'">
+                            </span>
+                            <span>
+                                <strong>Bilibili</strong>
+                                <small>视频与日常分享</small>
+                            </span>
+                        </a>
+                        <a class="friend-link-item" href="https://github.com/yuxiaoe666" target="_blank" rel="noopener">
+                            <span class="friend-link-icon">
+                                <img class="friend-logo-invert" src="/uploads/gallery/GitHub_Invertocat_Black.webp" alt="GitHub" loading="lazy" decoding="async" onerror="this.style.display='none'">
+                            </span>
+                            <span>
+                                <strong>GitHub</strong>
+                                <small>代码与折腾记录</small>
+                            </span>
+                        </a>
+                        <a href="https://github.com/yuxiaoe666" target="_blank" rel="noopener" class="friend-link-item friend-link-placeholder">
+                            <span class="friend-link-icon">✨</span>
+                            <span>
+                                <strong>申请友链</strong>
+                                <small>到 GitHub 找我交换链接</small>
+                            </span>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="card growth-card">
+                    <h2>🌱 博客成长记录</h2>
+                    <div class="growth-timeline">
+                        <div class="growth-event">
+                            <span class="growth-dot">🌸</span>
+                            <div><time>2025 · 起点</time><strong>开始记录</strong><p>把日常、思考和喜欢的东西放进自己的小站。</p></div>
+                        </div>
+                        <div class="growth-event">
+                            <span class="growth-dot">🛠️</span>
+                            <div><time>2026-05-23 · 建站</time><strong>正式建站</strong><p>从一个页面开始，逐渐加入文章、相册、音乐和留言。</p></div>
+                        </div>
+                        <div class="growth-event">
+                            <span class="growth-dot">✨</span>
+                            <div><time>现在 · 进行中</time><strong>持续更新</strong><p>每一次改动，都是这个小世界继续长大的证明。</p></div>
                         </div>
                     </div>
                 </div>
@@ -309,17 +448,13 @@
     <div class="page-transition-overlay" id="pageTransition"></div>
 
     <script src="js/modal.js"></script>
-    <script src="js/bg-canvas.js"></script>
     <script src="js/sakura.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/lazysizes@5.3.2/lazysizes.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/core.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/javascript.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/html.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/css.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/python.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/bash.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/json.min.js"></script>
+    <script src="js/snow.js"></script>
     <script src="js/click-spark.js"></script>
-    <script src="js/main.js"></script>
+    <script src="js/tilt.js"></script>
+    <script src="js/app.js"></script>
+    <script src="js/easter-egg.js"></script>
+    <script src="js/mood.js"></script>
+    <script src="js/life.js"></script>
 </body>
 </html>

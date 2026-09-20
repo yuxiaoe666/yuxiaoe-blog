@@ -21,7 +21,6 @@
 
         overlay.innerHTML =
             '<div class="global-modal-card">' +
-                '  <div class="dialogue-avatar"><img src="/uploads/gallery/1.jpg" alt="yuxiaoe" location="center"></div>' +
                 '<div class="global-modal-msg">' + safe + '</div>' +
                 '<button class="global-modal-btn" id="globalModalBtn">知道了(<span id="globalModalTimer">3</span>)</button>' +
             '</div>';

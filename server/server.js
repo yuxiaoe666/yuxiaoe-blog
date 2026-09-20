@@ -26,8 +26,9 @@ const galleryDir = path.join(uploadsDir, 'gallery');
 const settingsDir = path.join(uploadsDir, 'settings');
 const musicDir = path.join(uploadsDir, 'music');
 const heroDir = path.join(uploadsDir, 'hero');
+const postsUploadDir = path.join(uploadsDir, 'posts');
 
-[uploadsDir, commentsDir, galleryDir, settingsDir, musicDir, heroDir].forEach(dir => {
+[uploadsDir, commentsDir, galleryDir, settingsDir, musicDir, heroDir, postsUploadDir].forEach(dir => {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
 
@@ -157,7 +158,7 @@ app.get('/rss.xml', (req, res) => {
     const settings = db.getAllSettings();
     const siteTitle = settings.site_title || '鱼小鳄のBLOG';
     const siteSubtitle = settings.site_subtitle || '记录我那些不太起眼的日常';
-    const baseUrl = req.protocol + '://' + req.get('host');
+    const baseUrl = siteBaseUrl(req);
 
     const rssItems = posts.map(post => {
         const content = (post.html || '').replace(/<[^>]*>/g, '').substring(0, 500);
@@ -188,6 +189,77 @@ app.get('/rss.xml', (req, res) => {
 
     res.set('Content-Type', 'application/rss+xml');
     res.send(rssXml);
+});
+
+/* ==================== 摘要提取 ==================== */
+// 去掉脚本/样式/注释与标签，并把 HTML 实体还原成纯文本，便于生成 OG 摘要
+function buildExcerpt(html, limit) {
+    if (!html) return '';
+    const max = limit || 150;
+    const text = String(html)
+        .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+        .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+        .replace(/<!--[\s\S]*?-->/g, ' ')
+        .replace(/<[^>]*>/g, ' ')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&amp;/gi, '&')
+        .replace(/&lt;/gi, '<')
+        .replace(/&gt;/gi, '>')
+        .replace(/&quot;/gi, '"')
+        .replace(/&#0*39;/g, "'")
+        .replace(/\s+/g, ' ')
+        .trim();
+    if (text.length <= max) return text;
+    let cut = text.slice(0, max);
+    const breaks = ' \u3002\u3001\uff0c\uff01\uff1f\uff1b\u2026.,!?;:';
+    const at = Math.max.apply(null, Array.prototype.map.call(breaks, ch => cut.lastIndexOf(ch)));
+    if (at > max * 0.6) cut = cut.slice(0, at);
+    return cut.trim() + ' \u2026';
+}
+
+/* ==================== 站点根地址 ==================== */
+
+// Host 头不可信，先剔除可能被用来注入 XML/HTML 的字符
+function siteBaseUrl(req) {
+    const host = String(req.get('host') || '').replace(/[^\w.\-:\[\]]/g, '');
+    return req.protocol + '://' + host;
+}
+
+/* ==================== robots.txt ==================== */
+app.get('/robots.txt', (req, res) => {
+    res.type('text/plain').send(
+        'User-agent: *\n' +
+        'Allow: /\n' +
+        'Disallow: /api/\n' +
+        'Disallow: /server/\n' +
+        'Disallow: /data/\n' +
+        '\n' +
+        'Sitemap: ' + siteBaseUrl(req) + '/sitemap.xml\n'
+    );
+});
+
+/* ==================== sitemap.xml ==================== */
+app.get('/sitemap.xml', (req, res) => {
+    const baseUrl = siteBaseUrl(req);
+    const posts = db.getAllPosts();
+    const latest = posts.length > 0
+        ? new Date(posts[0].date).toISOString().slice(0, 10)
+        : new Date().toISOString().slice(0, 10);
+
+    const entries = [
+        `  <url><loc>${baseUrl}/</loc><lastmod>${latest}</lastmod><changefreq>daily</changefreq><priority>1.0</priority></url>`,
+        ...posts.map(post => {
+            const lastmod = new Date(post.date).toISOString().slice(0, 10);
+            return `  <url><loc>${baseUrl}/post/${post.id}</loc><lastmod>${lastmod}</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>`;
+        }),
+    ].join('\n');
+
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${entries}
+</urlset>`;
+
+    res.type('application/xml').send(xml);
 });
 
 /* ==================== API 路由 ==================== */
@@ -237,11 +309,34 @@ app.get('/post/:id', (req, res) => {
     const avatarHtml = settings.avatar
         ? '<img src="' + escapeHtml(settings.avatar) + '" alt="头像" style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid var(--pink-300);padding:2px;background:linear-gradient(135deg,var(--pink-200),var(--pink-400));">'
         : '<div class="avatar-placeholder">🌸</div>';
+    const avatarUrl = (settings.avatar && String(settings.avatar).trim()) || '/uploads/hero/oc.webp';
     const siteTitle = escapeHtml(settings.site_title || '鱼小鳄sugary');
     const siteSubtitle = escapeHtml(settings.site_subtitle || '记录我那些不太起眼的日常');
 
-    const description = post.html ? post.html.replace(/<[^>]*>/g, '').substring(0, 150).trim() : siteSubtitle;
+    const description = post.html ? (buildExcerpt(post.html, 150) || post.title) : siteSubtitle;
     const metaTags = tagsArr.join(', ');
+
+    const baseUrl = siteBaseUrl(req);
+    const shareImage = /^https?:\/\//i.test(avatarUrl) ? avatarUrl : baseUrl + avatarUrl;
+    const canonical = baseUrl + '/post/' + id;
+    const published = new Date(post.date);
+    const ogTags = [
+        '<meta property="og:type" content="article">',
+        '<meta property="og:site_name" content="' + escapeHtml(siteTitle) + '">',
+        '<meta property="og:title" content="' + escapeHtml(post.title) + '">',
+        '<meta property="og:description" content="' + escapeHtml(description) + '">',
+        '<meta property="og:url" content="' + escapeHtml(canonical) + '">',
+        '<meta property="og:image" content="' + escapeHtml(shareImage) + '">',
+        '<meta name="twitter:card" content="summary_large_image">',
+        '<meta name="twitter:title" content="' + escapeHtml(post.title) + '">',
+        '<meta name="twitter:description" content="' + escapeHtml(description) + '">',
+        '<meta name="twitter:image" content="' + escapeHtml(shareImage) + '">',
+        '<link rel="canonical" href="' + escapeHtml(canonical) + '">'
+    ];
+    if (!isNaN(published.getTime())) {
+        ogTags.splice(6, 0, '<meta property="article:published_time" content="' + published.toISOString() + '">');
+    }
+    const ogMeta = ogTags.join('\n    ');
 
     const { prev, next } = db.getPrevNextPosts(id);
     const prevHtml = prev 
@@ -266,6 +361,8 @@ app.get('/post/:id', (req, res) => {
         .replace(/{{BANNER_URL}}/g, escapeHtml(bannerUrl))
         .replace(/{{BANNER_CLASS}}/g, bannerClass ? ' ' + escapeHtml(bannerClass) : '')
         .replace(/{{AVATAR_HTML}}/g, avatarHtml)
+        .replace(/{{AVATAR_URL}}/g, escapeHtml(avatarUrl))
+        .replace(/{{OG_META}}/g, ogMeta)
         .replace(/{{SITE_TITLE}}/g, siteTitle)
         .replace(/{{SITE_SUBTITLE}}/g, siteSubtitle)
         .replace(/{{PREV_POST}}/g, prevHtml)
@@ -290,6 +387,33 @@ app.use(['/server', '/server/*', '/data', '/data/*', '/.env', '/.git', '/.git/*'
 });
 
 /* ==================== 前端静态文件 ==================== */
+/* ==================== \u9996\u9875\uff08\u6ce8\u5165\u5206\u4eab\u5143\u4fe1\u606f\uff09 ==================== */
+const INDEX_FILE = path.join(STATIC_DIR, 'index.html');
+app.get(['/', '/index.html'], (req, res, next) => {
+    fs.readFile(INDEX_FILE, 'utf-8', (err, html) => {
+        if (err || !html || html.indexOf('</head>') === -1) return next();
+        const settings = db.getAllSettings();
+        const baseUrl = siteBaseUrl(req);
+        const title = settings.site_title || '\u9c7c\u5c0f\u9cc4\u306eBLOG';
+        const desc = settings.site_subtitle || '\u8bb0\u5f55\u6211\u90a3\u4e9b\u4e0d\u592a\u8d77\u773c\u7684\u65e5\u5e38';
+        const rawImage = settings.banner || settings.avatar || '/uploads/hero/oc.webp';
+        const image = /^https?:\/\//i.test(rawImage) ? rawImage : baseUrl + rawImage;
+        const tags = [
+            '<meta property="og:type" content="website">',
+            '<meta property="og:site_name" content="' + escapeHtml(title) + '">',
+            '<meta property="og:title" content="' + escapeHtml(title) + '">',
+            '<meta property="og:description" content="' + escapeHtml(desc) + '">',
+            '<meta property="og:url" content="' + escapeHtml(baseUrl + '/') + '">',
+            '<meta property="og:image" content="' + escapeHtml(image) + '">',
+            '<meta name="twitter:card" content="summary_large_image">',
+            '<meta name="twitter:title" content="' + escapeHtml(title) + '">',
+            '<meta name="twitter:description" content="' + escapeHtml(desc) + '">',
+            '<meta name="twitter:image" content="' + escapeHtml(image) + '">'
+        ].join('\n    ');
+        res.type('html').send(html.replace('</head>', '    ' + tags + '\n</head>'));
+    });
+});
+
 app.use(express.static(STATIC_DIR, {
     index: 'index.html',
     setHeaders: (res, filePath) => {
@@ -300,8 +424,7 @@ app.use(express.static(STATIC_DIR, {
 }));
 
 /* ==================== 自定义 404 页面 ==================== */
-app.get('/404', (req, res) => {
-    const html = `<!DOCTYPE html>
+const NOT_FOUND_PAGE = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -372,13 +495,56 @@ app.get('/404', (req, res) => {
             0% { transform: translateY(0) rotate(0deg); opacity: 0.8; }
             100% { transform: translateY(100vh) rotate(360deg); opacity: 0; }
         }
+        .oc-404-wrap {
+            position: relative;
+            display: inline-block;
+            margin-bottom: 10px;
+        }
+        .oc-404 {
+            height: 240px;
+            max-width: 90vw;
+            object-fit: contain;
+            animation: float 3.5s ease-in-out infinite;
+            filter: drop-shadow(0 10px 24px rgba(240, 130, 160, 0.35));
+        }
+        .oc-404-bubble {
+            position: absolute;
+            top: 8px;
+            right: -46px;
+            max-width: 200px;
+            background: rgba(255, 255, 255, 0.92);
+            border-radius: 16px;
+            padding: 10px 14px;
+            font-size: 14px;
+            color: #4a2c38;
+            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.12);
+            animation: float 3.5s ease-in-out infinite;
+        }
+        .oc-404-bubble::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 28px;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-top: 10px solid rgba(255, 255, 255, 0.92);
+        }
+        @media (max-width: 600px) {
+            .oc-404 { height: 180px; }
+            .oc-404-bubble { right: -10px; max-width: 150px; font-size: 12px; }
+        }
     </style>
 </head>
 <body>
     <div class="not-found-container">
-        <div class="emoji-404">🌸</div>
+        <div class="oc-404-wrap">
+            <img class="oc-404" src="/uploads/hero/oc.webp" alt="鱼小鳄 OC 角色"
+                 onerror="this.style.display='none'; var f=document.getElementById('emoji404Fallback'); if(f) f.style.display='block';">
+            <div class="emoji-404" id="emoji404Fallback" style="display:none;">🌸</div>
+            <div class="oc-404-bubble">哎呀，页面迷路了喵～</div>
+        </div>
         <div class="title-404">404</div>
-        <div class="subtitle-404">哎呀，页面迷路了...</div>
+        <div class="subtitle-404">你要找的页面被樱花吹走了...</div>
         <a href="/" class="back-home">🏠 返回首页</a>
     </div>
     <script>
@@ -394,22 +560,31 @@ app.get('/404', (req, res) => {
     </script>
 </body>
 </html>`;
-    res.status(404).send(html);
+
+app.get('/404', (req, res) => {
+    res.status(404).type('html').send(NOT_FOUND_PAGE);
 });
 
-/* ==================== SPA fallback ==================== */
-app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api/')) {
-        return next();
-    }
-    res.sendFile(path.join(STATIC_DIR, 'index.html'), err => {
-        if (err) res.status(404).send('页面不存在');
-    });
+/* ==================== 访客计数 ==================== */
+app.get('/api/visitor', (req, res) => {
+    res.json({ count: db.getVisitorCount() });
+});
+
+app.post('/api/visitor', (req, res) => {
+    res.json({ count: db.addVisitor() });
 });
 
 /* ==================== API 404 ==================== */
 app.use('/api/*', (req, res) => {
     res.status(404).json({ error: '接口不存在' });
+});
+
+/* ==================== 页面 404 ==================== */
+// 前端走 hash 路由（/#/posts），服务端只有 / 需要返回 index.html。
+// 其余未匹配的路径一律返回真正的 404，避免 robots.txt、sitemap.xml 和写错的网址
+// 都被 index.html 以 200 顶掉（软 404）。
+app.use((req, res) => {
+    res.status(404).type('html').send(NOT_FOUND_PAGE);
 });
 
 /* ==================== 全局错误处理 ==================== */
