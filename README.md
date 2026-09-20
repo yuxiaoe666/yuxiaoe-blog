@@ -451,6 +451,16 @@ Hero 背景按 `uploads/hero/<weather>-<period>.*` 命名查找（依次尝试 `
 - 运行时数据：`data/comments.json`、`data/contacts.json`、`data/gallery.json`、`data/music.json`、`data/settings.json`、`data/visitors.json`
 - 备份 = 打包 `data/` 与 `server/uploads/` 两个目录即可。
 
+> ℹ️ 上面这些文件**都不在仓库里**（`.gitignore` 已排除），文章与数据只存在你本机。所以换电脑、重装系统、或者误删目录之前，请先手动备份 `data/` 与 `server/uploads/`。
+
+> ⚠️ **如果服务器是用 `git pull` 更新代码的**：`data/`（含文章 `data/posts/`）与 `server/uploads/` 都被 `.gitignore` 排除，而它们历史上曾被仓库跟踪——在服务器上执行 `git pull` 时，git 会把这些文件**从工作区直接删除**（文章、评论、图库、音乐全没了）。所以每次 pull 之前先备份，更新后再把备份放回去。在服务器的仓库根目录执行：
+
+```bash
+tar czf ~/blog-backup-$(date +%F).tar.gz data server/uploads   # pull 之前
+git pull
+tar xzf ~/blog-backup-$(date +%F).tar.gz                       # pull 之后，把运行时数据放回去
+```
+
 ---
 
 ## 📦 生产部署
@@ -551,7 +561,7 @@ sudo chown -R www-data:www-data data server/uploads
 │   ├── hero.js sakura.js snow.js click-spark.js scroll.js tilt.js easter-egg.js modal.js
 │   └── vendor/highlight.min.js # 代码高亮（本地内置）
 ├── data/
-│   ├── posts/                  # posts.json 索引 + 每篇文章的 HTML（需要提交）
+│   ├── posts/                  # posts.json 索引 + 每篇文章的 HTML（只在本地，已 gitignore）
 │   ├── comments.json           # 评论（运行时，已 gitignore）
 │   ├── contacts.json           # 留言（运行时，已 gitignore）
 │   ├── gallery.json            # 图库索引（运行时，已 gitignore）
@@ -571,7 +581,13 @@ sudo chown -R www-data:www-data data server/uploads
 └── README.md
 ```
 
-> `data/posts/` 会随仓库一起提交（你的文章就在里面）；`data/*.json` 与 `server/uploads/` 被忽略，克隆后是全新的空站点。如果连草稿目录也不希望公开，取消 `.gitignore` 里 `# data/posts/暂未写好/` 那行的注释。
+> 📌 **文章不上传 GitHub**：`data/posts/`（正文 HTML + `posts.json` 索引）与 `data/*.json`、`server/uploads/` 都被 `.gitignore` 排除，`git status` 里不会出现，也就不可能被 `git push` 带上去。仓库里只有代码和文档。
+>
+> 代价是文章只在你本机存在、没有版本历史，所以：
+> - 想留版本历史：在 `data/posts/` 里单独 `git init` 一个**不设远端**的本地仓库，随便提交；
+> - 想防丢：定期把 `data/` 和 `server/uploads/` 打个包放到网盘 / 另一台机器。
+>
+> 如果哪天想让文章也公开在仓库里，把 `.gitignore` 里 `data/posts/*.html`、`data/posts/posts.json` 那两行删掉，再 `git add -f data/posts` 即可。
 
 ---
 
@@ -586,6 +602,7 @@ sudo chown -R www-data:www-data data server/uploads
 | 上传返回 `400 上传字段名不正确` | 表单字段名必须是 `file`；用 curl 时确保 `type` 在 `-F "file=..."` 之前 |
 | 上传返回 `413` | 超过大小限制，或 Nginx `client_max_body_size` 太小 |
 | 克隆下来图库 / 音乐是空的 | `server/uploads/` 不进版本库，需要自己重新上传 |
+| 克隆下来一篇文章都没有 | 文章（`data/posts/`）只在作者本机保存，仓库里只有代码；首次启动会自动生成示例文章 |
 | 面板打不开 404 | `admin.html` 必须位于项目根目录（静态根目录） |
 | 图片上传成功但前台不显示 | 地址要以 `/uploads/...` 开头，且文件确实存在于对应目录 |
 | 中文乱码 | 项目文件统一 UTF-8；Windows PowerShell 查看请加 `-Encoding UTF8` |

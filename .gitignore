@@ -10,12 +10,11 @@ server/node_modules/
 server/uploads/
 
 # 运行时生成的数据索引（记录评论/访客/上传文件的索引，克隆后由服务自动重建）
-data/comments.json
-data/contacts.json
-data/gallery.json
-data/music.json
-data/settings.json
-data/visitors.json
+data/*.json
+
+# 文章正文与索引：只在本地保存，不推送到 GitHub
+data/posts/*.html
+data/posts/posts.json
 
 # 未写完的草稿（仅本地保留，不进仓库）
 data/posts/暂未写好/
